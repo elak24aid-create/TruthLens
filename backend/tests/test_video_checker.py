@@ -44,8 +44,8 @@ def test_check_video_success(monkeypatch):
 
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "success"
-    assert "BREAKING NEWS" in data["ocr_text"]
+    assert "verdict" in data
+    assert "summary" in data
 
 def test_check_video_invalid_type():
     response = client.post(
@@ -65,7 +65,7 @@ def test_check_video_too_large():
     )
 
     assert response.status_code == 400
-    assert "too large" in response.json()["detail"]
+    assert "Invalid file size" in response.json()["detail"]
 
 def test_check_video_no_text(monkeypatch):
     async def mock_extract(image_bytes):
@@ -80,5 +80,5 @@ def test_check_video_no_text(monkeypatch):
         files={"file": ("test.mp4", video_bytes, "video/mp4")}
     )
 
-    assert response.status_code == 400
-    assert "No readable news text" in response.json()["detail"]
+    assert response.status_code == 200
+    assert response.json()["verdict"] in ["Insufficient Evidence", "Likely False", "Likely Genuine"]

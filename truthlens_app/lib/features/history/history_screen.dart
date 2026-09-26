@@ -325,7 +325,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                             inputType: item.inputType,
                                             isHistory: true,
                                             historyTimestamp: item.timestamp,
-                                            historyResearchResult: item.researchResult,
                                           ),
                                         ),
                                       );

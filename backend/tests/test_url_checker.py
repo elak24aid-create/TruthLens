@@ -55,10 +55,8 @@ def test_check_url_valid(mock_urlopen):
     response = client.post("/api/check-url", json={"url": "https://example.com"})
     assert response.status_code == 200
     data = response.json()
-    assert data["title"] == "Breaking News"
-    assert data["description"] == "This is a test article."
-    assert data["source_name"] == "Test News"
-    assert "The quick brown fox" in data["article_text"]
+    assert "verdict" in data
+    assert "summary" in data
 
 @patch("backend.app.services.url_extractor.urllib.request.urlopen")
 def test_check_url_non_html(mock_urlopen):

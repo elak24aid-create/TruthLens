@@ -7,7 +7,8 @@ class HistoryItem {
   final String timestamp;
   final String textSnippet;
   final VerdictType verdict;
-  final int confidence;
+  final int? confidence;
+  final String verificationMode;
   final String summary;
   final String inputType;
   final String? url;
@@ -19,7 +20,8 @@ class HistoryItem {
     required this.timestamp,
     required this.textSnippet,
     required this.verdict,
-    required this.confidence,
+    this.confidence,
+    this.verificationMode = 'WEB RESEARCH',
     required this.summary,
     required this.inputType,
     this.url,
@@ -33,7 +35,8 @@ class HistoryItem {
       timestamp: json['timestamp'] as String? ?? '',
       textSnippet: json['text_snippet'] as String? ?? '',
       verdict: VerdictType.fromString(json['verdict'] as String? ?? 'Unverified'),
-      confidence: (json['confidence'] as num?)?.toInt() ?? 50,
+      confidence: (json['confidence'] as num?)?.toInt(),
+      verificationMode: json['verification_mode'] as String? ?? 'WEB RESEARCH',
       summary: json['summary'] as String? ?? '',
       inputType: json['input_type'] as String? ?? 'text',
       url: json['url'] as String?,
@@ -48,6 +51,7 @@ class HistoryItem {
       'text_snippet': textSnippet,
       'verdict': verdict.displayName,
       'confidence': confidence,
+      'verification_mode': verificationMode,
       'summary': summary,
       'input_type': inputType,
       'url': url,

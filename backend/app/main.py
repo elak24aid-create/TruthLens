@@ -10,6 +10,7 @@ from backend.app.routers.history import router as history_router
 from backend.app.routers.research import router as research_router
 from backend.app.routers.news import router as news_router
 from backend.app.routers.report import router as report_router
+from backend.app.routers.auth import router as auth_router
 from backend.app.utils.rate_limiter import SimpleRateLimiter
 
 app = FastAPI(
@@ -93,3 +94,4 @@ app.include_router(history_router, prefix="/api")
 app.include_router(research_router, prefix="/api")
 app.include_router(news_router, prefix="/api")
 app.include_router(report_router, prefix="/api")
+app.include_router(auth_router, prefix="/api")

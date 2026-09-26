@@ -19,13 +19,11 @@ def test_research_short_claim():
     assert data["research_status"] == "insufficient_evidence"
     assert len(data["sources"]) == 0
 
-@patch("duckduckgo_search.DDGS")
+@patch("backend.app.routers.research._fetch_ddg_sources")
 def test_research_valid_claim(mock_ddgs):
     # Mock DDGS responses
-    mock_instance = MagicMock()
-    mock_ddgs.return_value.__enter__.return_value = mock_instance
-    mock_instance.text.return_value = [
-        {"title": "Mars", "href": "https://en.wikipedia.org/wiki/Mars", "body": "Mars is the fourth planet from the Sun."}
+    mock_ddgs.return_value = [
+        {"title": "Mars", "url": "https://en.wikipedia.org/wiki/Mars", "source_name": "en.wikipedia.org", "snippet": "Mars is the fourth planet from the Sun.", "relevance": None, "published_date": None, "direction": "supporting"}
     ]
 
     response = client.post("/api/research", json={"claim": "NASA confirms Mars is a planet."})
@@ -40,11 +38,9 @@ def test_research_valid_claim(mock_ddgs):
     assert source["url"] == "https://en.wikipedia.org/wiki/Mars"
     assert source["source_name"] == "en.wikipedia.org"
 
-@patch("duckduckgo_search.DDGS")
+@patch("backend.app.routers.research._fetch_ddg_sources")
 def test_research_no_results(mock_ddgs):
-    mock_instance = MagicMock()
-    mock_ddgs.return_value.__enter__.return_value = mock_instance
-    mock_instance.text.return_value = []
+    mock_ddgs.return_value = []
     response = client.post("/api/research", json={"claim": "A totally made up claim that yields no results."})
     assert response.status_code == 200
     data = response.json()
@@ -52,11 +48,9 @@ def test_research_no_results(mock_ddgs):
     assert data["summary"] == "Insufficient online evidence found."
     assert len(data["sources"]) == 0
 
-@patch("duckduckgo_search.DDGS")
+@patch("backend.app.routers.research._fetch_ddg_sources")
 def test_research_api_failure(mock_ddgs):
-    mock_instance = MagicMock()
-    mock_ddgs.return_value.__enter__.return_value = mock_instance
-    mock_instance.text.side_effect = Exception("API down")
+    mock_ddgs.side_effect = Exception("API down")
     response = client.post("/api/research", json={"claim": "Valid claim but API fails."})
     assert response.status_code == 200
     data = response.json()

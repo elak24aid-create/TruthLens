@@ -11,11 +11,24 @@ class StorageService {
   static const String _reportsKey = 'truthlens_cached_reports';
   static const String _userKey = 'truthlens_user_session';
 
+  static Future<String> _getHistoryKey() async {
+    final prefs = await SharedPreferences.getInstance();
+    final email = prefs.getString('truthlens_email') ?? 'guest';
+    return '${_historyKey}_$email';
+  }
+
   // --- HISTORY ---
   static Future<List<HistoryItem>> getHistory() async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonList = prefs.getStringList(_historyKey) ?? [];
-    return jsonList.map((j) => HistoryItem.fromJson(jsonDecode(j))).toList();
+    final key = await _getHistoryKey();
+    final jsonList = prefs.getStringList(key) ?? [];
+    List<HistoryItem> items = [];
+    for (var j in jsonList) {
+      try {
+        items.add(HistoryItem.fromJson(jsonDecode(j)));
+      } catch (_) {}
+    }
+    return items;
   }
 
   static Future<void> saveHistoryItem(HistoryItem item) async {
@@ -23,7 +36,8 @@ class StorageService {
     final items = await getHistory();
     items.insert(0, item);
     final jsonList = items.map((i) => jsonEncode(i.toJson())).toList();
-    await prefs.setStringList(_historyKey, jsonList);
+    final key = await _getHistoryKey();
+    await prefs.setStringList(key, jsonList);
   }
 
   static Future<void> deleteHistoryItem(String id) async {
@@ -31,12 +45,14 @@ class StorageService {
     final items = await getHistory();
     items.removeWhere((item) => item.id == id);
     final jsonList = items.map((i) => jsonEncode(i.toJson())).toList();
-    await prefs.setStringList(_historyKey, jsonList);
+    final key = await _getHistoryKey();
+    await prefs.setStringList(key, jsonList);
   }
 
   static Future<void> clearHistory() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_historyKey);
+    final key = await _getHistoryKey();
+    await prefs.remove(key);
   }
 
   // --- NEWS CACHE ---
@@ -83,7 +99,13 @@ class StorageService {
   static Future<List<CommunityReport>> getCachedReports() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonList = prefs.getStringList(_reportsKey) ?? [];
-    return jsonList.map((j) => CommunityReport.fromJson(jsonDecode(j))).toList();
+    List<CommunityReport> items = [];
+    for (var j in jsonList) {
+      try {
+        items.add(CommunityReport.fromJson(jsonDecode(j)));
+      } catch (_) {}
+    }
+    return items;
   }
 
   static Future<void> cacheReports(List<CommunityReport> reports) async {

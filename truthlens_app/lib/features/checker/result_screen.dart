@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'share_helper.dart';
 import '../../models/analysis_result.dart';
+import '../../models/evidence_item.dart';
 import '../../widgets/verdict_badge.dart';
 import 'report_screen.dart';
 import '../../widgets/confidence_gauge.dart';
-import '../../widgets/why_verdict_card.dart';
 import '../../core/constants/app_colors.dart';
-import '../../core/constants/app_strings.dart';
 import '../../services/api_service.dart';
 import '../../services/local_history_service.dart';
 import '../../models/history_item.dart';
@@ -40,50 +39,22 @@ class _ResultScreenState extends State<ResultScreen> {
   final ApiService _apiService = ApiService();
   final LocalHistoryService _localHistoryService = LocalHistoryService();
   bool _isSaved = false;
-  
-  bool _isResearching = false;
-  ResearchResult? _researchResult;
-  String? _researchError;
 
   @override
   void initState() {
     super.initState();
-    if (widget.isHistory && widget.historyResearchResult != null) {
-      _researchResult = widget.historyResearchResult;
-      _isResearching = false;
-    } else if (widget.isHistory && widget.historyResearchResult == null) {
-      _isResearching = false;
-    } else {
-      _performResearch();
-    }
-  }
-
-  Future<void> _performResearch() async {
-    setState(() {
-      _isResearching = true;
-      _researchError = null;
-    });
+    // Research is now fully handled by the backend during the check API call.
+    // The frontend should no longer perform a redundant research request.
     
-    try {
-      final claimText = widget.result.extractedMetadata?['claim_text'] ?? widget.originalText;
-      final res = await _apiService.researchClaim(claimText);
-      if (mounted) {
-        setState(() {
-          _researchResult = res;
-          _isResearching = false;
-        });
+    // Automatically save to history when analysis completes successfully
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!widget.isHistory) {
+        _saveToHistory(showSnackbar: false);
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _researchError = e.toString();
-          _isResearching = false;
-        });
-      }
-    }
+    });
   }
 
-  Future<void> _saveToHistory() async {
+  Future<void> _saveToHistory({bool showSnackbar = true}) async {
     if (_isSaved) return;
 
     // Save to local storage
@@ -97,6 +68,7 @@ class _ResultScreenState extends State<ResultScreen> {
       confidence: widget.result.confidence,
       summary: widget.result.summary,
       inputType: widget.inputType,
+      analysisResult: widget.result,
     );
     await _localHistoryService.saveLocalItem(localItem);
 
@@ -107,29 +79,32 @@ class _ResultScreenState extends State<ResultScreen> {
       confidence: widget.result.confidence,
       summary: widget.result.summary,
       inputType: widget.inputType,
+      analysisResult: widget.result,
     );
 
     if (mounted) {
       setState(() {
         _isSaved = true;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Analysis saved to History.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (showSnackbar) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Analysis saved to History.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
 
-  Widget _buildSourceItem(ResearchSource source, bool isDark) {
+  Widget _buildSourceItem(EvidenceItem source, bool isDark) {
     IconData icon;
     Color iconColor;
-    if (source.direction == 'supporting') {
+    if (source.relationship == 'supporting') {
       icon = Icons.check_circle;
       iconColor = AppColors.verdictGenuine;
-    } else if (source.direction == 'contradicting') {
+    } else if (source.relationship == 'conflicting') {
       icon = Icons.warning;
       iconColor = AppColors.verdictMisleading;
     } else {
@@ -169,7 +144,7 @@ class _ResultScreenState extends State<ResultScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              '${source.sourceName} • ${source.direction.toUpperCase()}',
+              '${source.displaySource} • ${source.relationship.toUpperCase()} • ${source.displayDate}',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -178,7 +153,7 @@ class _ResultScreenState extends State<ResultScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              source.snippet,
+              source.displayExcerpt.isNotEmpty ? source.displayExcerpt : source.title,
               style: TextStyle(
                 fontSize: 12,
                 height: 1.4,
@@ -188,9 +163,11 @@ class _ResultScreenState extends State<ResultScreen> {
             const SizedBox(height: 8),
             InkWell(
               onTap: () async {
-                final url = Uri.parse(source.url);
-                if (await canLaunchUrl(url)) {
-                  await launchUrl(url);
+                if (source.url != null && source.url!.isNotEmpty) {
+                  final url = Uri.parse(source.url!);
+                  if (await canLaunchUrl(url)) {
+                    await launchUrl(url);
+                  }
                 }
               },
               child: const Text(
@@ -218,43 +195,13 @@ class _ResultScreenState extends State<ResultScreen> {
           originalText: widget.originalText,
           isHistory: widget.isHistory,
           historyTimestamp: widget.historyTimestamp,
-          researchResult: _researchResult,
         ),
       ),
     );
   }
 
   String _generateDynamicExplanation() {
-    final verdict = widget.result.verdict.displayName;
-    final conf = widget.result.confidence;
-    final r = _researchResult;
-    int supporting = 0;
-    int contradicting = 0;
-    
-    if (r != null) {
-      supporting = r.sources.where((s) => s.direction == 'supporting').length;
-      contradicting = r.sources.where((s) => s.direction == 'contradicting').length;
-    }
-
-    String explanation = "The ML model classified this content as $verdict with a confidence of $conf%. ";
-    if (r == null || _isResearching) {
-      explanation += "Online research is currently unavailable or still processing. ";
-    } else if (r.sources.isEmpty) {
-      explanation += "Online research found 0 external evidence sources. ";
-    } else {
-      explanation += "Online research found ${r.sources.length} relevant sources. ";
-      if (supporting > 0 && contradicting == 0) {
-        explanation += "These sources generally provided information supporting the claims. ";
-      } else if (contradicting > 0 && supporting == 0) {
-        explanation += "These sources generally provided information contradicting or debunking the claims. ";
-      } else if (supporting > 0 && contradicting > 0) {
-        explanation += "These sources provided a mix of supporting and contradicting information. ";
-      } else {
-        explanation += "These sources provided neutral background context without definitively proving or disproving the claims. ";
-      }
-    }
-    explanation += "Please note: this result should be treated as an automated probabilistic assessment rather than absolute proof.";
-    return explanation;
+    return widget.result.summary;
   }
 
 
@@ -263,14 +210,14 @@ class _ResultScreenState extends State<ResultScreen> {
     buffer.writeln('TRUTHLENS VERIFICATION');
     buffer.writeln();
     buffer.writeln('Verdict: ${widget.result.verdict.displayName}');
-    buffer.writeln('ML Confidence: ${widget.result.confidence}%');
+    buffer.writeln('Confidence: ${widget.result.confidence ?? "N/A"}%');
     buffer.writeln('Input Type: ${widget.inputType.toUpperCase()}');
     buffer.writeln();
     buffer.writeln('Why This Verdict:');
     buffer.writeln(_generateDynamicExplanation());
     buffer.writeln();
-    if (_researchResult != null) {
-      buffer.writeln('Online Evidence: ${_researchResult!.sources.length} available sources');
+    if (widget.result.evidence.isNotEmpty) {
+      buffer.writeln('Online Evidence: ${widget.result.evidence.length} available sources');
     }
     buffer.writeln();
     buffer.writeln('Limitations:');
@@ -318,7 +265,7 @@ class _ResultScreenState extends State<ResultScreen> {
                     const Text('Why are you reporting this result?', style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      value: selectedReason,
+                      initialValue: selectedReason,
                       isExpanded: true,
                       items: ['Incorrect verdict', 'Misleading result', 'Missing evidence', 'Incorrect source information', 'Other']
                           .map((r) => DropdownMenuItem(value: r, child: Text(r)))
@@ -409,15 +356,9 @@ class _ResultScreenState extends State<ResultScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final result = widget.result;
 
-    List<ResearchSource> supportingSources = [];
-    List<ResearchSource> contradictingSources = [];
-    List<ResearchSource> neutralSources = [];
-    
-    if (_researchResult != null) {
-      supportingSources = _researchResult!.sources.where((s) => s.direction == 'supporting').toList();
-      contradictingSources = _researchResult!.sources.where((s) => s.direction == 'contradicting').toList();
-      neutralSources = _researchResult!.sources.where((s) => s.direction == 'neutral').toList();
-    }
+    List<EvidenceItem> supportingSources = widget.result.evidence.where((s) => s.relationship == 'supporting').toList();
+    List<EvidenceItem> contradictingSources = widget.result.evidence.where((s) => s.relationship == 'conflicting').toList();
+    List<EvidenceItem> neutralSources = widget.result.evidence.where((s) => s.relationship != 'supporting' && s.relationship != 'conflicting').toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -478,10 +419,23 @@ class _ResultScreenState extends State<ResultScreen> {
                   children: [
                     VerdictBadge(verdict: result.verdict, isLarge: true),
                     const SizedBox(height: 16),
-                    ConfidenceGauge(
-                      confidence: result.confidence,
-                      activeColor: result.verdict.color,
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black12,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        'MODE: ${result.verificationMode}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
                     ),
+                    const SizedBox(height: 16),
+                    if (result.confidence != null)
+                      ConfidenceGauge(
+                        confidence: result.confidence ?? 0,
+                        activeColor: result.verdict.color,
+                      ),
                   ],
                 ),
               ),
@@ -495,17 +449,18 @@ class _ResultScreenState extends State<ResultScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildSectionHeader('ML Analysis', Icons.psychology),
+                    _buildSectionHeader('Verification Details', Icons.psychology),
                     const SizedBox(height: 12),
                     Text(
-                      'Predicted Class: ${result.verdict.displayName}',
+                      'Verdict: ${result.verdict.displayName}',
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      'Confidence: ${result.confidence}%',
-                      style: const TextStyle(fontSize: 14),
-                    ),
+                    if (result.confidence != null)
+                      Text(
+                        'Confidence: ${result.confidence}%',
+                        style: const TextStyle(fontSize: 14),
+                      ),
                     const SizedBox(height: 8),
                     Text(
                       'Explanation: ${result.summary}',
@@ -546,9 +501,9 @@ class _ResultScreenState extends State<ResultScreen> {
                           child: Text('Video Duration: ${result.extractedMetadata!['duration_sec'] ?? '?'}s | Frames: ${result.extractedMetadata!['frames_sampled'] ?? '?'}', style: const TextStyle(fontSize: 13)),
                         ),
                       if (result.extractedMetadata!['ocr_text'] != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8, bottom: 4),
-                          child: Text('OCR Text:', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        const Padding(
+                          padding: EdgeInsets.only(top: 8, bottom: 4),
+                          child: Text('OCR Text:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                         ),
                     ],
                     Text(
@@ -599,45 +554,29 @@ class _ResultScreenState extends State<ResultScreen> {
                   children: [
                     _buildSectionHeader('Online Evidence', Icons.travel_explore),
                     const SizedBox(height: 16),
-                    if (_isResearching)
-                      const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: CircularProgressIndicator(),
-                        ),
+                    if (widget.result.evidence.isEmpty)
+                      const Text(
+                        'No external evidence could be found or the claim could not be verified.',
+                        style: TextStyle(fontStyle: FontStyle.italic),
                       )
-                    else if (_researchError != null)
-                      Text(
-                        'Research failed: ${_researchError}',
-                        style: const TextStyle(color: Colors.red),
-                      )
-                    else if (_researchResult != null)
+                    else
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            _researchResult!.summary,
-                            style: TextStyle(
-                              fontSize: 13,
-                              height: 1.4,
-                              color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
                           if (supportingSources.isNotEmpty) ...[
-                            Row(children: const [Icon(Icons.check_circle, size: 16, color: AppColors.verdictGenuine), SizedBox(width: 8), Text('Supporting Evidence', style: TextStyle(fontWeight: FontWeight.bold))]),
+                            const Row(children: [Icon(Icons.check_circle, size: 16, color: AppColors.verdictGenuine), SizedBox(width: 8), Text('Supporting Evidence', style: TextStyle(fontWeight: FontWeight.bold))]),
                             const SizedBox(height: 8),
-                            ...supportingSources.map((s) => _buildSourceItem(s, isDark)).toList(),
+                            ...supportingSources.map((s) => _buildSourceItem(s, isDark)),
                           ],
                           if (contradictingSources.isNotEmpty) ...[
-                            Row(children: const [Icon(Icons.warning, size: 16, color: AppColors.verdictMisleading), SizedBox(width: 8), Text('Contradicting Evidence', style: TextStyle(fontWeight: FontWeight.bold))]),
+                            const Row(children: [Icon(Icons.warning, size: 16, color: AppColors.verdictMisleading), SizedBox(width: 8), Text('Contradicting Evidence', style: TextStyle(fontWeight: FontWeight.bold))]),
                             const SizedBox(height: 8),
-                            ...contradictingSources.map((s) => _buildSourceItem(s, isDark)).toList(),
+                            ...contradictingSources.map((s) => _buildSourceItem(s, isDark)),
                           ],
                           if (neutralSources.isNotEmpty) ...[
-                            Row(children: const [Icon(Icons.info, size: 16, color: Colors.blueGrey), SizedBox(width: 8), Text('Background / Neutral Evidence', style: TextStyle(fontWeight: FontWeight.bold))]),
+                            const Row(children: [Icon(Icons.info, size: 16, color: Colors.blueGrey), SizedBox(width: 8), Text('Background / Neutral Evidence', style: TextStyle(fontWeight: FontWeight.bold))]),
                             const SizedBox(height: 8),
-                            ...neutralSources.map((s) => _buildSourceItem(s, isDark)).toList(),
+                            ...neutralSources.map((s) => _buildSourceItem(s, isDark)),
                           ],
                         ],
                       ),

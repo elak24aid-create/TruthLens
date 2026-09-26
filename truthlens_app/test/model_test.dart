@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:truthlens_app/models/verdict.dart';
 import 'package:truthlens_app/models/analysis_result.dart';
-import 'package:truthlens_app/models/signal_item.dart';
 import 'package:truthlens_app/models/history_item.dart';
 
 void main() {

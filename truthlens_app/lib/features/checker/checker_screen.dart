@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
@@ -137,18 +136,7 @@ class _CheckerScreenState extends State<CheckerScreen>
     });
 
     try {
-      final urlData = await _apiService.checkUrl(url);
-      final claimText = urlData['claim_text'] as String;
-      
-      // Use the extracted claim text to perform the ML analysis
-      final result = await _apiService.checkText(claimText);
-      
-      // Pass the extracted metadata to ResultScreen
-      // Since we cannot easily inject it into AnalysisResult model if it's strictly typed without modifying the model,
-      // Actually, AnalysisResult has extractedMetadata!
-      // The checkText backend currently doesn't know about the URL. 
-      // We'll modify the Dart AnalysisResult object before navigating.
-      result.extractedMetadata = urlData;
+      final result = await _apiService.checkUrl(url);
 
       if (mounted) {
         setState(() {
@@ -316,7 +304,7 @@ class _CheckerScreenState extends State<CheckerScreen>
               decoration: BoxDecoration(
                 color: AppColors.verdictMisleadingBg,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.verdictMisleading.withOpacity(0.3)),
+                border: Border.all(color: AppColors.verdictMisleading.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
@@ -481,6 +469,33 @@ class _CheckerScreenState extends State<CheckerScreen>
   }
 
   Widget _buildImageTab(bool isDark) {
+    if (_isLoading) {
+      return Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Analyzing Image Content...',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Extracting text, analyzing visual integrity, and performing research.',
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const SkeletonLoader(height: 200, borderRadius: 16),
+            const SizedBox(height: 16),
+            const SkeletonLoader(height: 60, borderRadius: 12),
+          ],
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -497,37 +512,69 @@ class _CheckerScreenState extends State<CheckerScreen>
           const SizedBox(height: 16),
           if (_imageBytes != null)
             Expanded(
-              child: Column(
-                children: [
-                  Expanded(
-                    child: Image.memory(
-                      _imageBytes!,
-                      fit: BoxFit.contain,
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    SizedBox(
+                      height: 250,
+                      child: Image.memory(
+                        _imageBytes!,
+                        fit: BoxFit.contain,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Selected: ${_selectedImage?.name}',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      TextButton.icon(
-                        onPressed: _pickImage,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Change Image'),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Selected: ${_selectedImage?.name}',
+                      style: const TextStyle(fontSize: 12),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    if (_errorMessage != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.verdictMisleading.withAlpha(25),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.verdictMisleading.withAlpha(76)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline, size: 18, color: AppColors.verdictMisleading),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _errorMessage!,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.verdictMisleading,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(width: 16),
-                      ElevatedButton.icon(
-                        onPressed: _analyzeImage,
-                        icon: const Icon(Icons.search),
-                        label: const Text('Check Image'),
-                      ),
+                      const SizedBox(height: 16),
                     ],
-                  ),
-                ],
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 16,
+                      runSpacing: 12,
+                      children: [
+                        TextButton.icon(
+                          onPressed: _pickImage,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Change Image'),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: _analyzeImage,
+                          icon: const Icon(Icons.search),
+                          label: const Text('Check Image'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             )
           else
@@ -543,6 +590,14 @@ class _CheckerScreenState extends State<CheckerScreen>
                       icon: const Icon(Icons.upload_file),
                       label: const Text('Select Image'),
                     ),
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        _errorMessage!,
+                        style: const TextStyle(color: AppColors.verdictMisleading),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -585,14 +640,10 @@ class _CheckerScreenState extends State<CheckerScreen>
     });
 
     try {
-      final imgData = await _apiService.checkImage(
+      final result = await _apiService.checkImage(
         _imageBytes!.toList(),
         _selectedImage?.name ?? 'image.png',
       );
-      final claimText = imgData['claim_text'] as String;
-      
-      final result = await _apiService.checkText(claimText);
-      result.extractedMetadata = imgData;
 
       if (mounted) {
         setState(() {
@@ -620,6 +671,33 @@ class _CheckerScreenState extends State<CheckerScreen>
   }
 
   Widget _buildVideoTab(bool isDark) {
+    if (_isLoading) {
+      return Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Analyzing Video Content...',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Extracting frames and performing content/claim analysis from extracted video information.',
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const SkeletonLoader(height: 200, borderRadius: 16),
+            const SizedBox(height: 16),
+            const SkeletonLoader(height: 60, borderRadius: 12),
+          ],
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -636,40 +714,70 @@ class _CheckerScreenState extends State<CheckerScreen>
           const SizedBox(height: 16),
           if (_selectedVideo != null)
             Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.video_file, size: 64, color: AppColors.primaryLight),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Selected: ${_selectedVideo?.name}',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                      textAlign: TextAlign.center,
-                    ),
-                    if (_videoBytes != null)
+              child: SingleChildScrollView(
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.video_file, size: 64, color: AppColors.primaryLight),
+                      const SizedBox(height: 12),
                       Text(
-                        'Size: ${(_videoBytes!.length / (1024 * 1024)).toStringAsFixed(2)} MB',
-                        style: const TextStyle(fontSize: 11),
+                        'Selected: ${_selectedVideo?.name}',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center,
                       ),
-                    const SizedBox(height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        TextButton.icon(
-                          onPressed: _pickVideo,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Change Video'),
+                      if (_videoBytes != null)
+                        Text(
+                          'Size: ${(_videoBytes!.length / (1024 * 1024)).toStringAsFixed(2)} MB',
+                          style: const TextStyle(fontSize: 11),
                         ),
-                        const SizedBox(width: 16),
-                        ElevatedButton.icon(
-                          onPressed: _analyzeVideo,
-                          icon: const Icon(Icons.search),
-                          label: const Text('Check Video'),
+                      const SizedBox(height: 16),
+                      if (_errorMessage != null) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.verdictMisleading.withAlpha(25),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.verdictMisleading.withAlpha(76)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.error_outline, size: 18, color: AppColors.verdictMisleading),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _errorMessage!,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.verdictMisleading,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
+                        const SizedBox(height: 16),
                       ],
-                    ),
-                  ],
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 16,
+                        runSpacing: 12,
+                        children: [
+                          TextButton.icon(
+                            onPressed: _pickVideo,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Change Video'),
+                          ),
+                          ElevatedButton.icon(
+                            onPressed: _analyzeVideo,
+                            icon: const Icon(Icons.search),
+                            label: const Text('Check Video'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             )
@@ -686,6 +794,14 @@ class _CheckerScreenState extends State<CheckerScreen>
                       icon: const Icon(Icons.upload_file),
                       label: const Text('Select Video (Max 50MB)'),
                     ),
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        _errorMessage!,
+                        style: const TextStyle(color: AppColors.verdictMisleading),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -728,14 +844,10 @@ class _CheckerScreenState extends State<CheckerScreen>
     });
 
     try {
-      final vidData = await _apiService.checkVideo(
+      final result = await _apiService.checkVideo(
         _videoBytes!.toList(),
         _selectedVideo?.name ?? 'video.mp4',
       );
-      final claimText = vidData['claim_text'] as String;
-      
-      final result = await _apiService.checkText(claimText);
-      result.extractedMetadata = vidData;
 
       if (mounted) {
         setState(() {

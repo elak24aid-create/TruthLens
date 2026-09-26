@@ -1,0 +1,53 @@
+{
+  "total_cases": 30,
+  "exact_matches": 9,
+  "unexpected_cases": 20,
+  "accuracy": 0.6666666666666666,
+  "precision": 0.5,
+  "recall": 0.6,
+  "f1": 0.5454545454545454,
+  "false_positives": 6,
+  "false_negatives": 4,
+  "insufficient_evidence_count": 17,
+  "confusion_matrix": {
+    "Likely Genuine": {
+      "Likely Genuine": 6,
+      "Likely Misleading": 0,
+      "Likely False": 0,
+      "Insufficient Evidence": 4,
+      "Unverified": 0
+    },
+    "Likely Misleading": {
+      "Likely Genuine": 2,
+      "Likely Misleading": 0,
+      "Likely False": 0,
+      "Insufficient Evidence": 3,
+      "Unverified": 0
+    },
+    "Likely False": {
+      "Likely Genuine": 0,
+      "Likely Misleading": 0,
+      "Likely False": 0,
+      "Insufficient Evidence": 0,
+      "Unverified": 0
+    },
+    "Insufficient Evidence": {
+      "Likely Genuine": 2,
+      "Likely Misleading": 0,
+      "Likely False": 0,
+      "Insufficient Evidence": 3,
+      "Unverified": 0
+    },
+    "Unverified": {
+      "Likely Genuine": 2,
+      "Likely Misleading": 1,
+      "Likely False": 0,
+      "Insufficient Evidence": 7,
+      "Unverified": 0
+    }
+  },
+  "reproducibility": {
+    "mismatches": 10,
+    "deterministic": false
+  }
+}

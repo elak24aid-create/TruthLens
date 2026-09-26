@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../services/storage_service.dart';
+import '../../services/auth_service.dart';
 import '../shell/main_navigation_scaffold.dart';
 import 'sign_up_screen.dart';
 
@@ -24,11 +24,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _login() async {
     if (_formKey.currentState!.validate()) {
-      // Local demo auth
-      await StorageService.saveUser({
-        'name': 'Student User',
-        'email': _emailController.text,
-      });
+      final success = await AuthService.login(_emailController.text, _passwordController.text);
+      
+      if (!success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Login failed. Please check credentials.')),
+          );
+        }
+        return;
+      }
       
       if (mounted) {
         Navigator.of(context).pushReplacement(

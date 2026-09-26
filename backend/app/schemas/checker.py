@@ -1,7 +1,7 @@
 from typing import List, Optional
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field, field_validator
-from .common import VerdictEnum, SignalItem, EvidenceItem
+from .common import VerdictEnum, SignalItem, EvidenceItem, VerificationMode
 
 
 class CheckTextRequest(BaseModel):
@@ -50,13 +50,20 @@ class CheckVideoResponse(BaseModel):
     frames_sampled: int
     timestamps: List[str]
 
+class ExtractedMetadata(BaseModel):
+    claims_found: List[str] = Field(default_factory=list)
+    media_authenticity_notes: List[str] = Field(default_factory=list)
+
 class AnalysisResult(BaseModel):
     verdict: VerdictEnum = Field(..., description="Evidence-based classification verdict")
-    confidence: int = Field(..., ge=0, le=100, description="Confidence percentage assessment (not guaranteed truth)")
+    confidence: Optional[int] = Field(None, ge=0, le=100, description="Confidence percentage assessment")
+    verification_mode: VerificationMode = Field(..., description="The method used to verify this claim")
     language: str = Field(default="English", description="Detected language of the content")
     summary: str = Field(..., description="Executive summary of the credibility analysis")
     why_this_verdict: List[str] = Field(default_factory=list, description="Bullet points explaining how the assessment was derived")
     signals: List[SignalItem] = Field(default_factory=list, description="Categorized multi-signal assessment breakdown")
     evidence: List[EvidenceItem] = Field(default_factory=list, description="Supporting, conflicting, or contextual evidence citations")
-    extracted_metadata: Optional[dict] = Field(default=None, description="Metadata if extracted via URL or rich text")
+    extracted_metadata: ExtractedMetadata = Field(default_factory=ExtractedMetadata, description="Metadata if extracted via URL or rich text")
+    search_time_ms: int = Field(default=0, description="Time taken to perform online search")
+    limitations: List[str] = Field(default_factory=list, description="Any limitations encountered during search")
     analyzed_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../services/storage_service.dart';
+import '../../services/auth_service.dart';
 import '../shell/main_navigation_scaffold.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -25,20 +25,26 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   void _signUp() async {
     if (_formKey.currentState!.validate()) {
-      // Local demo auth sign up
-      await StorageService.saveUser({
-        'name': _nameController.text,
-        'email': _emailController.text,
-      });
+      final success = await AuthService.register(_emailController.text, _passwordController.text);
+      
+      if (!success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Sign up failed. User may already exist.')),
+          );
+        }
+        return;
+      }
       
       if (mounted) {
-        Navigator.of(context).pushReplacement(
+        Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
             builder: (_) => MainNavigationScaffold(
               currentThemeMode: widget.currentThemeMode,
               onThemeModeChanged: widget.onThemeModeChanged,
             ),
           ),
+          (route) => false,
         );
       }
     }

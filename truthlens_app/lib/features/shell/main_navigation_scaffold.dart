@@ -61,8 +61,8 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
         onDestinationSelected: _navigateToTab,
         backgroundColor: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
         indicatorColor: isDark
-            ? AppColors.primary.withOpacity(0.4)
-            : AppColors.primaryLight.withOpacity(0.15),
+            ? AppColors.primary.withValues(alpha: 0.4)
+            : AppColors.primaryLight.withValues(alpha: 0.15),
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),

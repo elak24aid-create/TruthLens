@@ -4,6 +4,7 @@ import '../core/constants/app_colors.dart';
 enum VerdictType {
   likelyGenuine,
   likelyMisleading,
+  likelyFalse,
   unverified,
   satire,
   insufficientEvidence;
@@ -15,8 +16,11 @@ enum VerdictType {
         return VerdictType.likelyGenuine;
       case 'likely misleading':
       case 'misleading':
-      case 'fake':
         return VerdictType.likelyMisleading;
+      case 'likely false':
+      case 'false':
+      case 'fake':
+        return VerdictType.likelyFalse;
       case 'satire':
         return VerdictType.satire;
       case 'insufficient evidence':
@@ -32,6 +36,8 @@ enum VerdictType {
         return 'Likely Genuine';
       case VerdictType.likelyMisleading:
         return 'Likely Misleading';
+      case VerdictType.likelyFalse:
+        return 'Likely False';
       case VerdictType.unverified:
         return 'Unverified';
       case VerdictType.satire:
@@ -47,6 +53,8 @@ enum VerdictType {
         return AppColors.verdictGenuine;
       case VerdictType.likelyMisleading:
         return AppColors.verdictMisleading;
+      case VerdictType.likelyFalse:
+        return AppColors.verdictMisleading; // fallback to same red for now
       case VerdictType.unverified:
         return AppColors.verdictUnverified;
       case VerdictType.satire:
@@ -61,6 +69,8 @@ enum VerdictType {
       case VerdictType.likelyGenuine:
         return AppColors.verdictGenuineBg;
       case VerdictType.likelyMisleading:
+        return AppColors.verdictMisleadingBg;
+      case VerdictType.likelyFalse:
         return AppColors.verdictMisleadingBg;
       case VerdictType.unverified:
         return AppColors.verdictUnverifiedBg;
@@ -77,6 +87,8 @@ enum VerdictType {
         return Icons.verified_outlined;
       case VerdictType.likelyMisleading:
         return Icons.warning_amber_rounded;
+      case VerdictType.likelyFalse:
+        return Icons.error_outline_rounded;
       case VerdictType.unverified:
         return Icons.help_outline_rounded;
       case VerdictType.satire:

@@ -2,7 +2,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
 
 class ApiConfig {
-  static const String productionUrl = 'https://truthlens-api.onrender.com/api'; // Placeholder for actual deployed backend
+  static const String productionUrl = 'https://truthlens-api.onrender.com/api';
 
   /// Resolves the appropriate local backend host based on the active platform:
   /// - Android emulator: 10.0.2.2 (special alias to host loopback interface)

@@ -6,7 +6,6 @@ import '../../core/constants/app_colors.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'download_helper.dart';
 
-import '../../models/research_result.dart';
 
 class ReportScreen extends StatelessWidget {
   final AnalysisResult result;
@@ -14,7 +13,6 @@ class ReportScreen extends StatelessWidget {
   final String originalText;
   final bool isHistory;
   final String? historyTimestamp;
-  final ResearchResult? researchResult;
 
   const ReportScreen({
     super.key,
@@ -23,7 +21,6 @@ class ReportScreen extends StatelessWidget {
     required this.originalText,
     this.isHistory = false,
     this.historyTimestamp,
-    this.researchResult,
   });
 
   String _generateReportText() {
@@ -40,7 +37,7 @@ class ReportScreen extends StatelessWidget {
 
     buffer.writeln('2. ML Analysis');
     buffer.writeln('   - Model result: ${result.verdict.displayName}');
-    buffer.writeln('   - Confidence: ${result.confidence}%');
+    buffer.writeln('   - Confidence: ${result.confidence ?? "N/A"}%');
     buffer.writeln('   - Explanation: ${result.summary}');
     buffer.writeln();
 
@@ -66,7 +63,7 @@ class ReportScreen extends StatelessWidget {
       buffer.writeln('   - Research summary: Found ${result.evidence.length} relevant sources.');
       for (int i = 0; i < result.evidence.length; i++) {
         final ev = result.evidence[i];
-        buffer.writeln('     [${i + 1}] ${ev.title} (${ev.source})');
+        buffer.writeln('     [${i + 1}] ${ev.title} (${ev.publisher})');
         buffer.writeln('         ${ev.url}');
       }
     }

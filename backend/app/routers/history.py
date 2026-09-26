@@ -2,16 +2,32 @@ import os
 import json
 import uuid
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Header
 from backend.app.schemas.history import HistoryItemCreate, HistoryItemResponse
 from backend.app.config import BASE_DIR
 
 router = APIRouter(prefix="/history", tags=["History"])
 
 HISTORY_FILE = BASE_DIR / "data" / "history.json"
+USERS_FILE = BASE_DIR / "data" / "users.json"
 
+def _get_current_user(authorization: str) -> Optional[str]:
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    token = authorization.split(" ")[1]
+    if not os.path.exists(USERS_FILE):
+        return None
+    try:
+        with open(USERS_FILE, "r", encoding="utf-8") as f:
+            users = json.load(f)
+            for email, data in users.items():
+                if data.get("token") == token:
+                    return email
+    except:
+        pass
+    return None
 
 def _load_history() -> List[dict]:
     if not os.path.exists(HISTORY_FILE):
@@ -22,28 +38,35 @@ def _load_history() -> List[dict]:
     except Exception:
         return []
 
-
 def _save_history(items: List[dict]):
     HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         json.dump(items, f, indent=2)
 
-
 @router.get("", response_model=List[HistoryItemResponse])
-def get_history():
+def get_history(authorization: Optional[str] = Header(None)):
     """
     Retrieves the list of previous checks sorted by newest first.
     """
+    user_id = _get_current_user(authorization) if authorization else None
+    
     items = _load_history()
+    # Filter by user if logged in, else only show anonymous items
+    if user_id:
+        items = [i for i in items if i.get("user_id") == user_id]
+    else:
+        items = [i for i in items if not i.get("user_id")]
+        
     # Sort descending by timestamp
     return sorted(items, key=lambda x: x.get("timestamp", ""), reverse=True)
 
-
 @router.post("", response_model=HistoryItemResponse, status_code=status.HTTP_201_CREATED)
-def add_history_entry(entry: HistoryItemCreate):
+def add_history_entry(entry: HistoryItemCreate, authorization: Optional[str] = Header(None)):
     """
     Saves an analysis check to local history.
     """
+    user_id = _get_current_user(authorization) if authorization else None
+    
     items = _load_history()
     new_item = {
         "id": str(uuid.uuid4()),
@@ -56,6 +79,7 @@ def add_history_entry(entry: HistoryItemCreate):
         "url": entry.url,
         "analysis_result": entry.analysis_result,
         "research_result": entry.research_result,
+        "user_id": user_id
     }
     items.insert(0, new_item)
     _save_history(items)

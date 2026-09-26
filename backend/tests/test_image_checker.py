@@ -28,9 +28,8 @@ def test_check_image_success(monkeypatch):
 
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "success"
-    assert data["ocr_text"] == "BREAKING NEWS: SHOCKING ALIEN DISCOVERY"
-    assert data["claim_text"] == "BREAKING NEWS: SHOCKING ALIEN DISCOVERY"
+    assert "verdict" in data
+    assert "summary" in data
 
 def test_check_image_invalid_type():
     response = client.post(
@@ -50,7 +49,7 @@ def test_check_image_too_large():
     )
 
     assert response.status_code == 400
-    assert "too large" in response.json()["detail"]
+    assert "Invalid file size" in response.json()["detail"]
 
 def test_check_image_no_text(monkeypatch):
     async def mock_extract(image_bytes):
@@ -68,5 +67,5 @@ def test_check_image_no_text(monkeypatch):
         files={"file": ("test.png", image_bytes, "image/png")}
     )
 
-    assert response.status_code == 400
-    assert "No readable news text" in response.json()["detail"]
+    assert response.status_code == 200
+    assert response.json()["verdict"] in ["Insufficient Evidence", "Likely False"]

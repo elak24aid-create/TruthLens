@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../services/storage_service.dart';
+import '../../services/auth_service.dart';
 import '../shell/main_navigation_scaffold.dart';
 import 'login_screen.dart';
 
@@ -26,10 +26,10 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _checkAuth() async {
     await Future.delayed(const Duration(seconds: 2));
-    final user = await StorageService.getUser();
+    final token = await AuthService.getToken();
     if (!mounted) return;
     
-    if (user != null) {
+    if (token != null) {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => MainNavigationScaffold(

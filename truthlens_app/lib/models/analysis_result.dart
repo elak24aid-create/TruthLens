@@ -4,7 +4,8 @@ import 'evidence_item.dart';
 
 class AnalysisResult {
   final VerdictType verdict;
-  final int confidence;
+  final int? confidence; // Made optional
+  final String verificationMode; // Added
   final String language;
   final String summary;
   final List<String> whyThisVerdict;
@@ -15,7 +16,8 @@ class AnalysisResult {
 
   AnalysisResult({
     required this.verdict,
-    required this.confidence,
+    this.confidence,
+    this.verificationMode = 'WEB RESEARCH',
     required this.language,
     required this.summary,
     required this.whyThisVerdict,
@@ -42,7 +44,8 @@ class AnalysisResult {
 
     return AnalysisResult(
       verdict: VerdictType.fromString(rawVerdict),
-      confidence: (json['confidence'] as num?)?.toInt() ?? 50,
+      confidence: (json['confidence'] as num?)?.toInt(),
+      verificationMode: json['verification_mode'] as String? ?? 'WEB RESEARCH',
       language: json['language'] as String? ?? 'English',
       summary: json['summary'] as String? ?? '',
       whyThisVerdict: whyList,
@@ -57,6 +60,7 @@ class AnalysisResult {
     return {
       'verdict': verdict.displayName,
       'confidence': confidence,
+      'verification_mode': verificationMode,
       'language': language,
       'summary': summary,
       'why_this_verdict': whyThisVerdict,

@@ -21,7 +21,7 @@ class VerdictBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: verdict.backgroundColor,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: verdict.color.withOpacity(0.3), width: 1.2),
+        border: Border.all(color: verdict.color.withValues(alpha: 0.3), width: 1.2),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

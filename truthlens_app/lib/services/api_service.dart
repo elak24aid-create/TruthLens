@@ -45,10 +45,17 @@ class ApiService {
         body: jsonEncode({'text': text}),
       ).timeout(ApiConfig.requestTimeout);
       if (response.statusCode == 200) return AnalysisResult.fromJson(jsonDecode(response.body));
-      throw ApiException('Failed to analyze text');
+      
+      String errorMsg = 'Failed to analyze text (Status ${response.statusCode})';
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded['detail'] != null) errorMsg = decoded['detail'];
+      } catch (_) {}
+      throw ApiException(errorMsg, response.statusCode);
     } on SocketException {
       throw ApiException('Offline mode active. Connection required for analysis.');
     } catch (e) {
+      if (e is ApiException) rethrow;
       if (e.toString().contains('SocketException') || e.toString().contains('Connection refused')) {
         throw ApiException('Offline mode active. Connection required for analysis.');
       }
@@ -56,18 +63,25 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> checkUrl(String url) async {
+  Future<AnalysisResult> checkUrl(String url) async {
     try {
       final response = await _client.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/check-url'),
+        Uri.parse(ApiConfig.checkUrlEndpoint),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'url': url}),
       ).timeout(ApiConfig.requestTimeout);
-      if (response.statusCode == 200) return jsonDecode(response.body) as Map<String, dynamic>;
-      throw ApiException('Failed to analyze URL');
+      if (response.statusCode == 200) return AnalysisResult.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+      
+      String errorMsg = 'Failed to analyze URL (Status ${response.statusCode})';
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded['detail'] != null) errorMsg = decoded['detail'];
+      } catch (_) {}
+      throw ApiException(errorMsg, response.statusCode);
     } on SocketException {
       throw ApiException('Offline mode active. Connection required for analysis.');
     } catch (e) {
+      if (e is ApiException) rethrow;
       if (e.toString().contains('SocketException') || e.toString().contains('Connection refused')) {
         throw ApiException('Offline mode active. Connection required for analysis.');
       }
@@ -75,17 +89,30 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> checkImage(List<int> bytes, String filename) async {
+  Future<AnalysisResult> checkImage(List<int> bytes, String filename) async {
     try {
-      var request = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/api/check-image'));
-      request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+      var request = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/check-image'));
+      final ext = filename.split('.').last.toLowerCase();
+      final mimeType = ext == 'png' ? 'png' : (ext == 'webp' ? 'webp' : 'jpeg');
+      request.files.add(http.MultipartFile.fromBytes(
+        'file', bytes, 
+        filename: filename,
+        contentType: MediaType('image', mimeType)
+      ));
       var response = await _client.send(request).timeout(ApiConfig.requestTimeout);
       var responseBody = await response.stream.bytesToString();
-      if (response.statusCode == 200) return jsonDecode(responseBody) as Map<String, dynamic>;
-      throw ApiException('Failed to analyze image');
+      if (response.statusCode == 200) return AnalysisResult.fromJson(jsonDecode(responseBody) as Map<String, dynamic>);
+      
+      String errorMsg = 'Failed to analyze image (Status ${response.statusCode})';
+      try {
+        final decoded = jsonDecode(responseBody);
+        if (decoded['detail'] != null) errorMsg = decoded['detail'];
+      } catch (_) {}
+      throw ApiException(errorMsg, response.statusCode);
     } on SocketException {
       throw ApiException('Offline mode active. Connection required for analysis.');
     } catch (e) {
+      if (e is ApiException) rethrow;
       if (e.toString().contains('SocketException') || e.toString().contains('Connection refused')) {
         throw ApiException('Offline mode active. Connection required for analysis.');
       }
@@ -93,17 +120,30 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> checkVideo(List<int> bytes, String filename) async {
+  Future<AnalysisResult> checkVideo(List<int> bytes, String filename) async {
     try {
-      var request = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/api/check-video'));
-      request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+      var request = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/check-video'));
+      final ext = filename.split('.').last.toLowerCase();
+      final mimeType = ext == 'webm' ? 'webm' : (ext == 'mov' ? 'quicktime' : 'mp4');
+      request.files.add(http.MultipartFile.fromBytes(
+        'file', bytes, 
+        filename: filename,
+        contentType: MediaType('video', mimeType)
+      ));
       var response = await _client.send(request).timeout(const Duration(minutes: 2));
       var responseBody = await response.stream.bytesToString();
-      if (response.statusCode == 200) return jsonDecode(responseBody) as Map<String, dynamic>;
-      throw ApiException('Failed to analyze video');
+      if (response.statusCode == 200) return AnalysisResult.fromJson(jsonDecode(responseBody) as Map<String, dynamic>);
+      
+      String errorMsg = 'Failed to analyze video (Status ${response.statusCode})';
+      try {
+        final decoded = jsonDecode(responseBody);
+        if (decoded['detail'] != null) errorMsg = decoded['detail'];
+      } catch (_) {}
+      throw ApiException(errorMsg, response.statusCode);
     } on SocketException {
       throw ApiException('Offline mode active. Connection required for analysis.');
     } catch (e) {
+      if (e is ApiException) rethrow;
       if (e.toString().contains('SocketException') || e.toString().contains('Connection refused')) {
         throw ApiException('Offline mode active. Connection required for analysis.');
       }
@@ -114,7 +154,7 @@ class ApiService {
   Future<ResearchResult> researchClaim(String claim) async {
     try {
       final response = await _client.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/research'),
+        Uri.parse(ApiConfig.researchEndpoint),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'claim': claim}),
       ).timeout(ApiConfig.requestTimeout);
@@ -132,7 +172,10 @@ class ApiService {
 
   Future<NewsResponse> fetchNews({bool forceRefresh = false}) async {
     try {
-      final response = await _client.get(Uri.parse('${ApiConfig.baseUrl}/api/news')).timeout(ApiConfig.requestTimeout);
+      final uri = forceRefresh 
+          ? Uri.parse('${ApiConfig.newsEndpoint}?force_refresh=true')
+          : Uri.parse(ApiConfig.newsEndpoint);
+      final response = await _client.get(uri).timeout(ApiConfig.requestTimeout);
       if (response.statusCode == 200) {
         final newsResp = NewsResponse.fromJson(jsonDecode(response.body));
         await StorageService.cacheNews(newsResp);
@@ -151,10 +194,10 @@ class ApiService {
   Future<void> saveHistory({
     required String textSnippet,
     required String verdict,
-    required int confidence,
+    int? confidence,
     required String summary,
     required String inputType,
-    ResearchResult? researchResult,
+    AnalysisResult? analysisResult,
   }) async {
     final item = HistoryItem(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -163,7 +206,7 @@ class ApiService {
       verdict: VerdictType.fromString(verdict),
       confidence: confidence,
       summary: summary,
-      researchResult: researchResult,
+      analysisResult: analysisResult,
       timestamp: DateTime.now().toIso8601String(),
     );
     await StorageService.saveHistoryItem(item);
@@ -187,7 +230,7 @@ class ApiService {
   }) async {
     try {
       final response = await _client.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/reports'),
+        Uri.parse('${ApiConfig.baseUrl}/reports'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'category': category,
@@ -217,7 +260,7 @@ class ApiService {
   Future<List<CommunityReport>> getReports() async {
     try {
       final response = await _client.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/reports'),
+        Uri.parse('${ApiConfig.baseUrl}/reports'),
       ).timeout(ApiConfig.requestTimeout);
       
       if (response.statusCode == 200) {

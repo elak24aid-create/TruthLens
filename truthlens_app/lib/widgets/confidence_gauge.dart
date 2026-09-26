@@ -29,12 +29,26 @@ class ConfidenceGauge extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 4),
-        Text(
-          'Evidence Assessment Score',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+        Tooltip(
+          message: 'This score represents the weight of supporting vs conflicting verified evidence, not a direct probability of truth.',
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Evidence Assessment Score',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.info_outline,
+                size: 14,
+                color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 12),

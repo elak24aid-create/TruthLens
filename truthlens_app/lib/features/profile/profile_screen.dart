@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
-import '../../config/theme_config.dart';
 import '../../config/api_config.dart';
 import '../../core/constants/app_strings.dart';
 import '../../services/storage_service.dart';
+import '../../services/auth_service.dart';
 import '../auth/splash_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -40,7 +40,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _logout() async {
-    await StorageService.logout();
+    await AuthService.logout();
     if (!mounted) return;
     Navigator.of(context, rootNavigator: true).pushReplacement(
       MaterialPageRoute(
