@@ -1,107 +1,140 @@
 from fastapi import APIRouter, HTTPException, Query
 import logging
-import feedparser
 from datetime import datetime, timedelta
 from typing import List, Optional
 import time
+import requests
+from ddgs import DDGS
+from urllib.parse import quote
 
 from app.schemas.news import NewsResponse, NewsArticle
 
 router = APIRouter(prefix="/news", tags=["News Feed"])
 logger = logging.getLogger(__name__)
 
-# Simple in-memory cache
-_NEWS_CACHE = {
-    "data": None,
-    "timestamp": 0
-}
-CACHE_TTL_SECONDS = 300  # 5 minutes
+# Simple in-memory cache keyed by (category, query)
+_NEWS_CACHE = {}
+CACHE_TTL_SECONDS = 600  # 10 minutes (user requested refresh every 10 min)
 
-# Real news sources
-RSS_SOURCES = [
-    {"name": "BBC News", "url": "http://feeds.bbci.co.uk/news/world/rss.xml"},
-    {"name": "NASA", "url": "https://www.nasa.gov/news-release/feed/"},
-    {"name": "UN News", "url": "https://news.un.org/feed/subscribe/en/news/all/rss.xml"}
-]
-
-def fetch_and_normalize_news() -> List[NewsArticle]:
+def fetch_gdelt(query: str, limit: int) -> List[NewsArticle]:
     articles = []
-    seen_urls = set()
-    seen_titles = set()
-    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+    try:
+        # GDELT URL format
+        encoded_query = quote(query)
+        url = f"https://api.gdeltproject.org/api/v2/doc/doc?query={encoded_query}&mode=artlist&maxrecords={limit}&format=json"
+        res = requests.get(url, timeout=4) # fast timeout
+        if res.status_code == 200:
+            data = res.json()
+            if "articles" in data:
+                for item in data["articles"]:
+                    title = item.get("title", "").strip()
+                    url = item.get("url", "")
+                    if not title or not url:
+                        continue
+                    articles.append(NewsArticle(
+                        title=title,
+                        description=title, # GDELT artlist often doesn't give a good snippet
+                        url=url,
+                        source_name=item.get("domain", "GDELT Source"),
+                        published_at=item.get("seendate", datetime.utcnow().isoformat() + "Z"),
+                        image_url=item.get("socialimage", None),
+                        category=query
+                    ))
+    except Exception as e:
+        logger.warning(f"GDELT fetch failed: {e}")
+    return articles
 
-    for source in RSS_SOURCES:
-        try:
-            feed = feedparser.parse(source["url"])
-            if not feed.entries:
-                continue
-            
-            for entry in feed.entries:
-                title = entry.get("title", "").strip()
-                link = entry.get("link", "").strip()
-                description = entry.get("summary", "")
-                
-                # Basic cleaning
-                if not title or not link:
+def fetch_ddgs(query: str, limit: int) -> List[NewsArticle]:
+    articles = []
+    try:
+        with DDGS() as ddgs:
+            results = list(ddgs.news(query, max_results=limit))
+            for res in results:
+                title = res.get("title", "").strip()
+                url = res.get("url", "")
+                if not title or not url:
                     continue
-                
-                # Extract date
-                if hasattr(entry, "published_parsed") and entry.published_parsed:
-                    dt = datetime.utcfromtimestamp(time.mktime(entry.published_parsed))
-                else:
-                    # If we can't reliably parse the date, skip it to enforce 1-hour rule strictly
-                    continue
-
-                if dt < one_hour_ago:
-                    continue
-
-                # Duplicate checking
-                normalized_title = title.lower()
-                if link in seen_urls or normalized_title in seen_titles:
-                    continue
-                    
-                seen_urls.add(link)
-                seen_titles.add(normalized_title)
-                
-                pub_date_str = dt.isoformat() + "Z"
-
                 articles.append(NewsArticle(
                     title=title,
-                    description=description[:250] + "..." if len(description) > 250 else description,
-                    url=link,
-                    source_name=source["name"],
-                    published_at=pub_date_str,
-                    image_url=None, 
-                    category="General"
+                    description=res.get("body", ""),
+                    url=url,
+                    source_name=res.get("source", "News Source"),
+                    published_at=res.get("date", datetime.utcnow().isoformat() + "Z"),
+                    image_url=res.get("image", None),
+                    category=query
                 ))
-        except Exception as e:
-            logger.error(f"Error fetching RSS feed {source['name']}: {e}")
-            
-    # Sort by published_at descending
-    articles.sort(key=lambda x: x.published_at, reverse=True)
+    except Exception as e:
+        logger.warning(f"DDGS fetch failed: {e}")
     return articles
+
+def deduplicate_articles(articles: List[NewsArticle]) -> List[NewsArticle]:
+    seen_urls = set()
+    seen_titles = set()
+    unique = []
+    for a in articles:
+        normalized_title = a.title.lower()
+        if a.url in seen_urls or normalized_title in seen_titles:
+            continue
+        seen_urls.add(a.url)
+        seen_titles.add(normalized_title)
+        unique.append(a)
+    return unique
 
 @router.get("", response_model=NewsResponse)
 async def get_news(
+    query: Optional[str] = Query(None, description="Search query"),
+    category: Optional[str] = Query("All", description="News category"),
     limit: int = Query(20, ge=1, le=50),
     force_refresh: bool = Query(False)
 ):
     global _NEWS_CACHE
     current_time = time.time()
     
-    # Use cache if valid and refresh not forced
-    if not force_refresh and _NEWS_CACHE["data"] is not None:
-        if current_time - _NEWS_CACHE["timestamp"] < CACHE_TTL_SECONDS:
+    cache_key = f"{str(query).lower()}_{str(category).lower()}"
+    
+    if not force_refresh and cache_key in _NEWS_CACHE:
+        cached_data = _NEWS_CACHE[cache_key]
+        if current_time - cached_data["timestamp"] < CACHE_TTL_SECONDS:
             return NewsResponse(
-                articles=_NEWS_CACHE["data"][:limit],
-                updated_at=datetime.fromtimestamp(_NEWS_CACHE["timestamp"]).isoformat() + "Z",
+                articles=cached_data["data"][:limit],
+                updated_at=datetime.fromtimestamp(cached_data["timestamp"]).isoformat() + "Z",
                 status="success"
             )
             
+    # Determine actual search term
+    search_term = ""
+    if query and query.strip():
+        search_term = query.strip()
+    elif category and category.lower() != "all":
+        search_term = category.strip()
+    else:
+        search_term = "world news" # default generic fallback
+
     try:
-        articles = fetch_and_normalize_news()
-        _NEWS_CACHE["data"] = articles
-        _NEWS_CACHE["timestamp"] = current_time
+        # Try GDELT First
+        articles = fetch_gdelt(search_term, limit=limit*2)
+        
+        # Fallback to DDGS if GDELT returned nothing
+        if not articles:
+            articles = fetch_ddgs(search_term, limit=limit*2)
+            
+        articles = deduplicate_articles(articles)
+        
+        # Sort by published_at descending
+        articles.sort(key=lambda x: x.published_at, reverse=True)
+        
+        if not articles:
+            # Only return empty if both failed entirely
+            return NewsResponse(
+                articles=[],
+                updated_at=datetime.fromtimestamp(current_time).isoformat() + "Z",
+                status="success"
+            )
+
+        _NEWS_CACHE[cache_key] = {
+            "data": articles,
+            "timestamp": current_time
+        }
         
         return NewsResponse(
             articles=articles[:limit],
@@ -109,12 +142,12 @@ async def get_news(
             status="success"
         )
     except Exception as e:
-        logger.error(f"News fetch failed: {e}")
-        # Fallback to cache if available
-        if _NEWS_CACHE["data"] is not None:
+        logger.error(f"News fetch completely failed: {e}")
+        if cache_key in _NEWS_CACHE:
+            cached_data = _NEWS_CACHE[cache_key]
             return NewsResponse(
-                articles=_NEWS_CACHE["data"][:limit],
-                updated_at=datetime.fromtimestamp(_NEWS_CACHE["timestamp"]).isoformat() + "Z",
+                articles=cached_data["data"][:limit],
+                updated_at=datetime.fromtimestamp(cached_data["timestamp"]).isoformat() + "Z",
                 status="success (cached)"
             )
         raise HTTPException(status_code=500, detail="Failed to load news")
