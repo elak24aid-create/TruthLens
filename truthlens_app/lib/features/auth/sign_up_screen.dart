@@ -25,27 +25,25 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   void _signUp() async {
     if (_formKey.currentState!.validate()) {
-      final success = await AuthService.register(_emailController.text, _passwordController.text);
-      
-      if (!success) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Sign up failed. User may already exist.')),
+      try {
+        final success = await AuthService.register(_emailController.text, _passwordController.text);
+        if (success && mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (_) => MainNavigationScaffold(
+                currentThemeMode: widget.currentThemeMode,
+                onThemeModeChanged: widget.onThemeModeChanged,
+              ),
+            ),
+            (route) => false,
           );
         }
-        return;
-      }
-      
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (_) => MainNavigationScaffold(
-              currentThemeMode: widget.currentThemeMode,
-              onThemeModeChanged: widget.onThemeModeChanged,
-            ),
-          ),
-          (route) => false,
-        );
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
+          );
+        }
       }
     }
   }
@@ -141,7 +139,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     child: const Text('Already have an account? Sign In'),
                   ),
                   const SizedBox(height: 8),
-                  const Text('Note: This is a demo local authentication.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  const Text('Note: Connected to live TruthLens API.', style: TextStyle(fontSize: 12, color: Colors.grey)),
                 ],
               ),
             ),

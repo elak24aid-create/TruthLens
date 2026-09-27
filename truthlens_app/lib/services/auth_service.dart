@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:truthlens_app/config/api_config.dart';
+
 class AuthService {
-  static const String baseUrl = 'http://127.0.0.1:8000/api/auth';
+  static String get baseUrl => '${ApiConfig.baseUrl}/auth';
   static const String tokenKey = 'truthlens_token';
   static const String emailKey = 'truthlens_email';
 
@@ -46,10 +48,17 @@ class AuthService {
         final data = jsonDecode(response.body);
         await setToken(data['token'], data['email']);
         return true;
+      } else if (response.statusCode == 401) {
+        throw Exception('Invalid credentials');
+      } else if (response.statusCode == 422) {
+        throw Exception('Invalid input format');
       }
-      return false;
+      throw Exception('Server error: ${response.statusCode}');
     } catch (e) {
-      return false;
+      if (e is Exception && e.toString().startsWith('Exception:')) {
+        rethrow;
+      }
+      throw Exception('Network error or server unavailable');
     }
   }
 
@@ -64,10 +73,17 @@ class AuthService {
         final data = jsonDecode(response.body);
         await setToken(data['token'], data['email']);
         return true;
+      } else if (response.statusCode == 400) {
+        throw Exception('Email already registered');
+      } else if (response.statusCode == 422) {
+        throw Exception('Invalid input format');
       }
-      return false;
+      throw Exception('Server error: ${response.statusCode}');
     } catch (e) {
-      return false;
+      if (e is Exception && e.toString().startsWith('Exception:')) {
+        rethrow;
+      }
+      throw Exception('Network error or server unavailable');
     }
   }
 }

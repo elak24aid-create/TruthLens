@@ -24,26 +24,24 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _login() async {
     if (_formKey.currentState!.validate()) {
-      final success = await AuthService.login(_emailController.text, _passwordController.text);
-      
-      if (!success) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Login failed. Please check credentials.')),
+      try {
+        final success = await AuthService.login(_emailController.text, _passwordController.text);
+        if (success && mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => MainNavigationScaffold(
+                currentThemeMode: widget.currentThemeMode,
+                onThemeModeChanged: widget.onThemeModeChanged,
+              ),
+            ),
           );
         }
-        return;
-      }
-      
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => MainNavigationScaffold(
-              currentThemeMode: widget.currentThemeMode,
-              onThemeModeChanged: widget.onThemeModeChanged,
-            ),
-          ),
-        );
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
+          );
+        }
       }
     }
   }
@@ -122,7 +120,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: const Text('Create Account / Sign Up'),
                   ),
                   const SizedBox(height: 8),
-                  const Text('Note: This is a demo local authentication.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  const Text('Note: Connected to live TruthLens API.', style: TextStyle(fontSize: 12, color: Colors.grey)),
                 ],
               ),
             ),
