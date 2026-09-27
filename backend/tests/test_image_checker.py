@@ -11,7 +11,7 @@ client = TestClient(app)
 def test_check_image_success(monkeypatch):
     # Mock OCR extraction
     async def mock_extract(image_bytes):
-        return "BREAKING NEWS: SHOCKING ALIEN DISCOVERY"
+        return ("BREAKING NEWS: SHOCKING ALIEN DISCOVERY", "OCR_SUCCESS")
     
     monkeypatch.setattr("app.routers.checker.extract_text_from_image", mock_extract)
 
@@ -53,7 +53,7 @@ def test_check_image_too_large():
 
 def test_check_image_no_text(monkeypatch):
     async def mock_extract(image_bytes):
-        return "   " # Empty text
+        return ("   ", "NO_TEXT_DETECTED")
     
     monkeypatch.setattr("app.routers.checker.extract_text_from_image", mock_extract)
 

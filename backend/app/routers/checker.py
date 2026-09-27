@@ -179,12 +179,13 @@ async def check_image(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Invalid file size.")
 
     try:
-        ocr_text = await extract_text_from_image(image_bytes)
+        ocr_text, ocr_status = await extract_text_from_image(image_bytes)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
     metadata = ExtractedMetadata(
         ocr_text=ocr_text,
+        ocr_status=ocr_status,
         claims_found=[ocr_text] if ocr_text and len(ocr_text.strip()) > 5 else []
     )
 

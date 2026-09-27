@@ -53,6 +53,8 @@ class CheckVideoResponse(BaseModel):
 class ExtractedMetadata(BaseModel):
     claims_found: List[str] = Field(default_factory=list)
     media_authenticity_notes: List[str] = Field(default_factory=list)
+    ocr_text: Optional[str] = None
+    ocr_status: Optional[str] = None
 
 class AnalysisResult(BaseModel):
     verdict: VerdictEnum = Field(..., description="Evidence-based classification verdict")

@@ -56,7 +56,7 @@ async def extract_text_from_video(video_bytes: bytes, max_frames: int = 5) -> Di
             
             try:
                 # Use existing OCR
-                text = await extract_text_from_image(frame_bytes)
+                text, status = await extract_text_from_image(frame_bytes)
                 if text and len(text.strip()) > 3:
                     # Basic dedup: skip if this text is very similar to the last one
                     if not extracted_text_blocks or text.strip() not in extracted_text_blocks[-1]:
