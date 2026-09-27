@@ -3,7 +3,7 @@ from typing import List
 from datetime import datetime, timezone
 import uuid
 
-from backend.app.schemas.report import ReportCreate, ReportResponse
+from app.schemas.report import ReportCreate, ReportResponse
 
 router = APIRouter(
     prefix="/reports",

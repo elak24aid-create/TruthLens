@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
-from backend.app.main import app
-from backend.app.routers.report import _reports_db
+from app.main import app
+from app.routers.report import _reports_db
 
 client = TestClient(app)
 

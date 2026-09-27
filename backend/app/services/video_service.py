@@ -3,7 +3,7 @@ import tempfile
 import logging
 import cv2
 from typing import Dict, Any
-from backend.app.services.ocr_service import extract_text_from_image
+from app.services.ocr_service import extract_text_from_image
 
 logger = logging.getLogger(__name__)
 

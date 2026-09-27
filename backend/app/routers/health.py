@@ -1,7 +1,7 @@
 from fastapi import APIRouter
-from backend.app.schemas.common import HealthResponse
-from backend.app.config import settings
-from backend.app.ml.predictor import get_predictor
+from app.schemas.common import HealthResponse
+from app.config import settings
+from app.ml.predictor import get_predictor
 
 router = APIRouter(tags=["Health"])
 

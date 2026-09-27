@@ -5,7 +5,7 @@ import hashlib
 from fastapi import APIRouter, HTTPException, status, Header
 from pydantic import BaseModel
 from typing import Optional
-from backend.app.config import BASE_DIR
+from app.config import BASE_DIR
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 

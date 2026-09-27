@@ -1,4 +1,4 @@
-from backend.app.services.language_detector import detect_language
+from app.services.language_detector import detect_language
 
 
 def test_detect_english():

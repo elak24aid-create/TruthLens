@@ -6,9 +6,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 
-from backend.app.config import settings
-from backend.app.ml.dataset import load_news_dataset
-from backend.app.ml.evaluation import compute_metrics
+from app.config import settings
+from app.ml.dataset import load_news_dataset
+from app.ml.evaluation import compute_metrics
 
 
 def train_model(dataset_path: Path = None) -> dict:

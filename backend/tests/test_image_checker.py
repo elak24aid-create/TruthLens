@@ -3,8 +3,8 @@ from fastapi.testclient import TestClient
 from PIL import Image, ImageDraw
 import io
 
-from backend.app.main import app
-from backend.app.services import ocr_service
+from app.main import app
+from app.services import ocr_service
 
 client = TestClient(app)
 
@@ -13,7 +13,7 @@ def test_check_image_success(monkeypatch):
     async def mock_extract(image_bytes):
         return "BREAKING NEWS: SHOCKING ALIEN DISCOVERY"
     
-    monkeypatch.setattr("backend.app.routers.checker.extract_text_from_image", mock_extract)
+    monkeypatch.setattr("app.routers.checker.extract_text_from_image", mock_extract)
 
     # Create a dummy image
     img = Image.new('RGB', (100, 100))
@@ -55,7 +55,7 @@ def test_check_image_no_text(monkeypatch):
     async def mock_extract(image_bytes):
         return "   " # Empty text
     
-    monkeypatch.setattr("backend.app.routers.checker.extract_text_from_image", mock_extract)
+    monkeypatch.setattr("app.routers.checker.extract_text_from_image", mock_extract)
 
     img = Image.new('RGB', (100, 100))
     buf = io.BytesIO()

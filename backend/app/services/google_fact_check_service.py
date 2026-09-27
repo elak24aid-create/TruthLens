@@ -4,7 +4,7 @@ import logging
 from typing import List, Optional
 from datetime import datetime, timezone
 
-from backend.app.schemas.common import EvidenceItem
+from app.schemas.common import EvidenceItem
 
 logger = logging.getLogger(__name__)
 

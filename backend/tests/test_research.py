@@ -1,8 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
-from backend.app.main import app
+from app.main import app
 from unittest.mock import patch, MagicMock
-from backend.app.schemas.research import ResearchRequest
+from app.schemas.research import ResearchRequest
 
 client = TestClient(app)
 
@@ -19,7 +19,7 @@ def test_research_short_claim():
     assert data["research_status"] == "insufficient_evidence"
     assert len(data["sources"]) == 0
 
-@patch("backend.app.routers.research._fetch_ddg_sources")
+@patch("app.routers.research._fetch_ddg_sources")
 def test_research_valid_claim(mock_ddgs):
     # Mock DDGS responses
     mock_ddgs.return_value = [
@@ -38,7 +38,7 @@ def test_research_valid_claim(mock_ddgs):
     assert source["url"] == "https://en.wikipedia.org/wiki/Mars"
     assert source["source_name"] == "en.wikipedia.org"
 
-@patch("backend.app.routers.research._fetch_ddg_sources")
+@patch("app.routers.research._fetch_ddg_sources")
 def test_research_no_results(mock_ddgs):
     mock_ddgs.return_value = []
     response = client.post("/api/research", json={"claim": "A totally made up claim that yields no results."})
@@ -48,7 +48,7 @@ def test_research_no_results(mock_ddgs):
     assert data["summary"] == "Insufficient online evidence found."
     assert len(data["sources"]) == 0
 
-@patch("backend.app.routers.research._fetch_ddg_sources")
+@patch("app.routers.research._fetch_ddg_sources")
 def test_research_api_failure(mock_ddgs):
     mock_ddgs.side_effect = Exception("API down")
     response = client.post("/api/research", json={"claim": "Valid claim but API fails."})

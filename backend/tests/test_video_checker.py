@@ -5,8 +5,8 @@ import os
 import cv2
 import numpy as np
 
-from backend.app.main import app
-from backend.app.services import video_service
+from app.main import app
+from app.services import video_service
 
 client = TestClient(app)
 
@@ -33,7 +33,7 @@ def test_check_video_success(monkeypatch):
     async def mock_extract(image_bytes):
         return "BREAKING NEWS: SHOCKING ALIEN DISCOVERY"
     
-    monkeypatch.setattr("backend.app.services.video_service.extract_text_from_image", mock_extract)
+    monkeypatch.setattr("app.services.video_service.extract_text_from_image", mock_extract)
 
     video_bytes = create_dummy_video()
 
@@ -71,7 +71,7 @@ def test_check_video_no_text(monkeypatch):
     async def mock_extract(image_bytes):
         return "   " # Empty text
     
-    monkeypatch.setattr("backend.app.services.video_service.extract_text_from_image", mock_extract)
+    monkeypatch.setattr("app.services.video_service.extract_text_from_image", mock_extract)
 
     video_bytes = create_dummy_video()
 

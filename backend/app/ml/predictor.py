@@ -3,7 +3,7 @@ import joblib
 from typing import Dict, Any, List, Optional
 import numpy as np
 
-from backend.app.config import settings
+from app.config import settings
 
 
 class NewsPredictor:

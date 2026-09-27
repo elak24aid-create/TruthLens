@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 import logging
 from urllib.parse import urlparse
 
-from backend.app.schemas.research import ResearchRequest, ResearchResponse, ResearchSource
+from app.schemas.research import ResearchRequest, ResearchResponse, ResearchSource
 
 router = APIRouter(
     prefix="/research",

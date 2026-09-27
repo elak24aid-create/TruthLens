@@ -1,8 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
-from backend.app.main import app
+from app.main import app
 from unittest.mock import patch
-import backend.app.routers.news as news_router_module
+import app.routers.news as news_router_module
 
 client = TestClient(app)
 

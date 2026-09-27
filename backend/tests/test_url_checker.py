@@ -1,8 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
-from backend.app.main import app
+from app.main import app
 from unittest.mock import patch, MagicMock
-from backend.app.services.url_extractor import is_safe_url
+from app.services.url_extractor import is_safe_url
 
 client = TestClient(app)
 
@@ -31,7 +31,7 @@ def test_check_url_invalid_protocol():
     response = client.post("/api/check-url", json={"url": "ftp://test.com"})
     assert response.status_code == 422
 
-@patch("backend.app.services.url_extractor.urllib.request.urlopen")
+@patch("app.services.url_extractor.urllib.request.urlopen")
 def test_check_url_valid(mock_urlopen):
     # Mock successful fetch
     mock_response = MagicMock()
@@ -58,7 +58,7 @@ def test_check_url_valid(mock_urlopen):
     assert "verdict" in data
     assert "summary" in data
 
-@patch("backend.app.services.url_extractor.urllib.request.urlopen")
+@patch("app.services.url_extractor.urllib.request.urlopen")
 def test_check_url_non_html(mock_urlopen):
     mock_response = MagicMock()
     mock_response.headers.get_content_type.return_value = "application/pdf"

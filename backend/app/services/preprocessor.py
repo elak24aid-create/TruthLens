@@ -1,6 +1,6 @@
 import re
 from typing import Dict, Any, List
-from backend.app.utils.sanitizer import sanitize_text
+from app.utils.sanitizer import sanitize_text
 
 # Misinformation linguistic red flags / sensationalism indicators
 SENSATIONAL_PATTERNS = [

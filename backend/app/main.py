@@ -3,15 +3,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 
-from backend.app.config import settings
-from backend.app.routers.health import router as health_router
-from backend.app.routers.checker import router as checker_router
-from backend.app.routers.history import router as history_router
-from backend.app.routers.research import router as research_router
-from backend.app.routers.news import router as news_router
-from backend.app.routers.report import router as report_router
-from backend.app.routers.auth import router as auth_router
-from backend.app.utils.rate_limiter import SimpleRateLimiter
+from app.config import settings
+from app.routers.health import router as health_router
+from app.routers.checker import router as checker_router
+from app.routers.history import router as history_router
+from app.routers.research import router as research_router
+from app.routers.news import router as news_router
+from app.routers.report import router as report_router
+from app.routers.auth import router as auth_router
+from app.utils.rate_limiter import SimpleRateLimiter
 
 app = FastAPI(
     title="TruthLens API",

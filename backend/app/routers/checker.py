@@ -1,18 +1,18 @@
 from fastapi import APIRouter, HTTPException, status, UploadFile, File
 import time
-from backend.app.schemas.checker import CheckTextRequest, CheckUrlRequest, AnalysisResult, ExtractedMetadata
-from backend.app.services.preprocessor import preprocess_news_text
-from backend.app.services.language_detector import detect_language
-from backend.app.services.source_credibility import analyze_source_credibility
-from backend.app.services.evidence_aggregator import aggregate_evidence
-from backend.app.services.url_extractor import fetch_and_extract_article
-from backend.app.ml.predictor import get_predictor
-from backend.app.services.online_research import perform_online_research
-from backend.app.services.google_service import GoogleVerificationService
-from backend.app.services.google_fact_check_service import GoogleFactCheckService
-from backend.app.services.ocr_service import extract_text_from_image
-from backend.app.services.video_service import extract_text_from_video
-from backend.app.schemas.common import VerificationMode, EvidenceItem
+from app.schemas.checker import CheckTextRequest, CheckUrlRequest, AnalysisResult, ExtractedMetadata
+from app.services.preprocessor import preprocess_news_text
+from app.services.language_detector import detect_language
+from app.services.source_credibility import analyze_source_credibility
+from app.services.evidence_aggregator import aggregate_evidence
+from app.services.url_extractor import fetch_and_extract_article
+from app.ml.predictor import get_predictor
+from app.services.online_research import perform_online_research
+from app.services.google_service import GoogleVerificationService
+from app.services.google_fact_check_service import GoogleFactCheckService
+from app.services.ocr_service import extract_text_from_image
+from app.services.video_service import extract_text_from_video
+from app.schemas.common import VerificationMode, EvidenceItem
 import logging
 
 logger = logging.getLogger(__name__)

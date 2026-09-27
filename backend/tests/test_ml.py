@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
-from backend.app.ml.predictor import NewsPredictor
-from backend.app.ml.dataset import load_news_dataset
+from app.ml.predictor import NewsPredictor
+from app.ml.dataset import load_news_dataset
 
 
 def test_predictor_unloaded_fallback():

@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import List, Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, status, Header
-from backend.app.schemas.history import HistoryItemCreate, HistoryItemResponse
-from backend.app.config import BASE_DIR
+from app.schemas.history import HistoryItemCreate, HistoryItemResponse
+from app.config import BASE_DIR
 
 router = APIRouter(prefix="/history", tags=["History"])
 

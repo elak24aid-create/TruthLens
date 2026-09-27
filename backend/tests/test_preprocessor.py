@@ -1,4 +1,4 @@
-from backend.app.services.preprocessor import preprocess_news_text
+from app.services.preprocessor import preprocess_news_text
 
 
 def test_clean_text_normal():

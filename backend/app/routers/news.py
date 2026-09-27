@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 import time
 
-from backend.app.schemas.news import NewsResponse, NewsArticle
+from app.schemas.news import NewsResponse, NewsArticle
 
 router = APIRouter(prefix="/news", tags=["News Feed"])
 logger = logging.getLogger(__name__)

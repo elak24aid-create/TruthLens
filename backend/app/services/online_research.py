@@ -1,6 +1,6 @@
 from typing import List, Optional
 from ddgs import DDGS
-from backend.app.schemas.common import EvidenceItem
+from app.schemas.common import EvidenceItem
 from datetime import datetime
 import re
 

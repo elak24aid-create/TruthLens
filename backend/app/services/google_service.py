@@ -10,7 +10,7 @@ from google import genai
 from google.genai import types
 from google.genai.errors import APIError
 
-from backend.app.schemas.common import EvidenceItem, VerdictEnum
+from app.schemas.common import EvidenceItem, VerdictEnum
 
 logger = logging.getLogger(__name__)
 

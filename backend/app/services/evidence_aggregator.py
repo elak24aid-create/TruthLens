@@ -1,6 +1,6 @@
 from typing import Dict, Any, List
-from backend.app.schemas.common import VerdictEnum, SignalItem, SignalStatusEnum, EvidenceItem, VerificationMode
-from backend.app.schemas.checker import AnalysisResult, ExtractedMetadata
+from app.schemas.common import VerdictEnum, SignalItem, SignalStatusEnum, EvidenceItem, VerificationMode
+from app.schemas.checker import AnalysisResult, ExtractedMetadata
 
 def aggregate_evidence(
     text: str,
