@@ -55,6 +55,12 @@ class ExtractedMetadata(BaseModel):
     media_authenticity_notes: List[str] = Field(default_factory=list)
     ocr_text: Optional[str] = None
     ocr_status: Optional[str] = None
+    title: Optional[str] = None
+    source_name: Optional[str] = None
+    url: Optional[str] = None
+    published_at: Optional[str] = None
+    duration_sec: Optional[float] = None
+    frames_sampled: Optional[int] = None
 
 class AnalysisResult(BaseModel):
     verdict: VerdictEnum = Field(..., description="Evidence-based classification verdict")

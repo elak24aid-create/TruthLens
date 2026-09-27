@@ -526,18 +526,19 @@ class _ResultScreenState extends State<ResultScreen> {
                             color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
                           ),
                         ),
-                      ] else ...[
-                        Text(
-                          widget.originalText,
-                          maxLines: 4,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontStyle: FontStyle.italic,
-                            color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                          ),
+                      ], // Close the ocr_text if/else block
+                    ], // Close the extractedMetadata spread
+                    if (result.extractedMetadata == null)
+                      Text(
+                        widget.originalText,
+                        maxLines: 4,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontStyle: FontStyle.italic,
+                          color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
                         ),
-                      ]
+                      ),
                   ],
                 ),
               ),
