@@ -359,7 +359,7 @@ class _CheckerScreenState extends State<CheckerScreen>
 
           // Analyze Button
           ElevatedButton.icon(
-            onPressed: _analyzeNewsText,
+            onPressed: _isLoading ? null : _analyzeNewsText,
             icon: const Icon(Icons.travel_explore_rounded, size: 20),
             label: const Text(AppStrings.analyzeButton),
           ),
@@ -459,7 +459,7 @@ class _CheckerScreenState extends State<CheckerScreen>
           
           const SizedBox(height: 24),
           ElevatedButton.icon(
-            onPressed: _analyzeUrl,
+            onPressed: _isLoading ? null : _analyzeUrl,
             icon: const Icon(Icons.search, size: 20),
             label: const Text('Analyze URL'),
           ),
@@ -567,7 +567,7 @@ class _CheckerScreenState extends State<CheckerScreen>
                           label: const Text('Change Image'),
                         ),
                         ElevatedButton.icon(
-                          onPressed: _analyzeImage,
+                          onPressed: _isLoading ? null : _analyzeImage,
                           icon: const Icon(Icons.search),
                           label: const Text('Check Image'),
                         ),
@@ -770,7 +770,7 @@ class _CheckerScreenState extends State<CheckerScreen>
                             label: const Text('Change Video'),
                           ),
                           ElevatedButton.icon(
-                            onPressed: _analyzeVideo,
+                            onPressed: _isLoading ? null : _analyzeVideo,
                             icon: const Icon(Icons.search),
                             label: const Text('Check Video'),
                           ),

@@ -166,7 +166,7 @@ class _ResultScreenState extends State<ResultScreen> {
                 if (source.url != null && source.url!.isNotEmpty) {
                   final url = Uri.parse(source.url!);
                   if (await canLaunchUrl(url)) {
-                    await launchUrl(url);
+                    await launchUrl(url, mode: LaunchMode.externalApplication);
                   }
                 }
               },

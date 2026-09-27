@@ -428,7 +428,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   onPressed: () async {
                     final url = Uri.parse(article.url);
                     if (await canLaunchUrl(url)) {
-                      await launchUrl(url);
+                      await launchUrl(url, mode: LaunchMode.externalApplication);
                     }
                   },
                   icon: const Icon(Icons.open_in_browser, size: 14),

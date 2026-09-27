@@ -49,10 +49,10 @@ def perform_online_research(claim: str) -> Optional[List[EvidenceItem]]:
                 elif re.search(r'\b(fact\s*check(ed)?:?\s*(true|accurate|correct))\b', lower_title):
                     relationship = 'supporting'
                 else:
-                    # Look in body for strong signals
-                    if re.search(r'\b(false|fake|unfounded|fabricated|deception|myth)\b', lower_body):
+                    # Look in body for strong signals, avoiding generic words
+                    if re.search(r'\b(fact\s*check(ed)?:?\s*(false|fake|misleading|unfounded|hoax|debunked))\b', lower_body) or re.search(r'\b(debunked by)\b', lower_body):
                         relationship = 'conflicting'
-                    elif re.search(r'\b(true|accurate|confirmed)\b', lower_body):
+                    elif re.search(r'\b(fact\s*check(ed)?:?\s*(true|accurate|correct|legitimate))\b', lower_body):
                         relationship = 'supporting'
                     else:
                         relationship = 'context'
