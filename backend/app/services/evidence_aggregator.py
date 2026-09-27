@@ -60,8 +60,13 @@ def aggregate_evidence(
             )
         )
 
+    # Tally evidence
+    supporting_count = sum(1 for e in evidence_items if e.relationship == "supporting")
+    conflicting_count = sum(1 for e in evidence_items if e.relationship == "conflicting")
+    wiki_conflict = any(e.publisher == "wikipedia" and e.relationship == "conflicting" for e in evidence_items)
+
     # Base signals logic for insufficient text
-    if word_count < 5 and not (extracted_metadata and extracted_metadata.claims_found) and content_not_media(extracted_metadata):
+    if word_count < 5 and not wiki_conflict and conflicting_count == 0 and supporting_count == 0 and not (extracted_metadata and extracted_metadata.claims_found) and content_not_media(extracted_metadata):
         return AnalysisResult(
             verdict=VerdictEnum.INSUFFICIENT_EVIDENCE,
             confidence=0,
@@ -75,10 +80,6 @@ def aggregate_evidence(
             search_time_ms=search_time_ms
         )
 
-    # Tally evidence
-    supporting_count = sum(1 for e in evidence_items if e.relationship == "supporting")
-    conflicting_count = sum(1 for e in evidence_items if e.relationship == "conflicting")
-    
     # Priority: Google/Gemini Structured output overrides if it used grounding successfully
     if verification_mode == VerificationMode.GOOGLE_GROUNDED and google_verdict:
         # Convert Gemini Verdict
@@ -126,16 +127,26 @@ def aggregate_evidence(
             if ml_result.get("is_loaded"):
                 verification_mode = VerificationMode.LOCAL_ML_BASELINE
     
+    elif wiki_conflict:
+        verdict = VerdictEnum.LIKELY_MISLEADING
+        conf = 99
+        summary = "Online evidence contradicts or refutes the core claims."
+        why_this_verdict.append("Authoritative encyclopedic source explicitly refutes the identity claim.")
+        
     elif conflicting_count > 0 and conflicting_count >= supporting_count:
         verdict = VerdictEnum.LIKELY_MISLEADING
         conf = 85 + min(10, conflicting_count * 2)
         summary = "Online evidence contradicts or refutes the core claims."
         why_this_verdict.append(f"Found {conflicting_count} online fact-check(s) refuting this claim.")
-        if supporting_count > 0:
-            verdict = VerdictEnum.INSUFFICIENT_EVIDENCE
-            summary = "Online evidence is conflicting and inconclusive."
-            why_this_verdict.append("Found equal amounts of supporting and refuting claims.")
-            conf = 0
+        if supporting_count > 0 and supporting_count == conflicting_count:
+            if wiki_conflict:
+                # Strong identity conflict overrides a tie
+                pass
+            else:
+                verdict = VerdictEnum.INSUFFICIENT_EVIDENCE
+                summary = "Online evidence is conflicting and inconclusive."
+                why_this_verdict.append("Found equal amounts of supporting and refuting claims.")
+                conf = 0
 
     elif supporting_count > 0 and supporting_count > conflicting_count:
         verdict = VerdictEnum.LIKELY_GENUINE

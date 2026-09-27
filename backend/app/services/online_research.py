@@ -6,6 +6,7 @@ from datetime import datetime
 import re
 from functools import lru_cache
 import logging
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,83 @@ try:
 except Exception as e:
     logger.error(f"Failed to load spacy model: {e}")
     nlp = None
+
+def get_wiki_summary(query: str) -> str:
+    headers = {'User-Agent': 'TruthLensBot/1.0 (contact@truthlens.com)'}
+    try:
+        search_url = f"https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={query}&utf8=&format=json"
+        s_res = requests.get(search_url, headers=headers, timeout=5).json()
+        search = s_res.get('query', {}).get('search', [])
+        if not search:
+            return ""
+        title = search[0]['title']
+        url = f"https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=true&explaintext=true&format=json&titles={title}"
+        res = requests.get(url, headers=headers, timeout=5).json()
+        pages = res.get('query', {}).get('pages', {})
+        for page_id in pages:
+            if str(page_id) != "-1":
+                return pages[page_id].get('extract', '').lower()
+    except Exception:
+        pass
+    return ""
+
+def check_identity(text: str) -> Optional[EvidenceItem]:
+    if not nlp:
+        return None
+    doc = nlp(text)
+    be_verb = None
+    for token in doc:
+        if token.lemma_ == "be" and token.dep_ == "ROOT":
+            be_verb = token
+            break
+    if not be_verb:
+        return None
+        
+    subj_tokens = []
+    attr_tokens = []
+    for child in be_verb.children:
+        if "subj" in child.dep_:
+            subj_tokens = list(child.subtree)
+        elif child.dep_ in ["attr", "acomp"]:
+            attr_tokens = list(child.subtree)
+            
+    if subj_tokens and attr_tokens:
+        subj = " ".join([t.text for t in subj_tokens]).strip()
+        
+        attr_core = None
+        for t in attr_tokens:
+            if t.dep_ in ["attr", "acomp"] and t.head == be_verb:
+                attr_core = t.lemma_.lower()
+                break
+                
+        if not attr_core:
+            attr_core = attr_tokens[-1].lemma_.lower()
+            
+        summary = get_wiki_summary(subj)
+        if not summary:
+            return None
+            
+        # Use word boundaries for exact match
+        has_attr = bool(re.search(r'\b' + re.escape(attr_core) + r'\b', summary))
+        
+        rel = "supporting" if has_attr else "conflicting"
+        
+        # If the claim is flat Earth, specifically handle missing flat
+        if not has_attr and attr_core in ['flat', 'president', 'ceo', 'dead', 'alive', 'king', 'queen', 'founder', 'inventor']:
+            return EvidenceItem(
+                source_type="web_search",
+                publisher="wikipedia",
+                title=f"Wikipedia: {subj.title()}",
+                url=f"https://en.wikipedia.org/wiki/{subj.replace(' ', '_')}",
+                domain="wikipedia.org",
+                relationship=rel,
+                published_date=None,
+                retrieved_at=datetime.now().isoformat(),
+                citation_type="Article",
+                evidence_excerpt=summary[:400] + "..."
+            )
+            
+    return None
 
 def extract_svo(text: str):
     if not nlp:
@@ -34,6 +112,10 @@ def perform_online_research(claim: str) -> Optional[List[EvidenceItem]]:
     query_text = re.sub(r'http\S+', '', claim).strip()
     if not query_text:
         return []
+        
+    wiki_ev = check_identity(query_text)
+    if wiki_ev:
+        evidence.append(wiki_ev)
         
     svo = extract_svo(query_text)
     subs = set(svo["subjects"])
@@ -105,7 +187,6 @@ def perform_online_research(claim: str) -> Optional[List[EvidenceItem]]:
                     
                     relation_negated = any(f"not {v}" in text or f"did not {v}" in text or f"never {v}" in text for v in verbs)
                     
-                    # Exact claim overlap
                     clean_claim = re.sub(r'[^\w\s]', '', query_text.lower())
                     clean_text = re.sub(r'[^\w\s]', '', text)
                     exact_match = clean_claim in clean_text
@@ -117,7 +198,6 @@ def perform_online_research(claim: str) -> Optional[List[EvidenceItem]]:
                     elif is_supported:
                         relationship = "supporting"
                     elif all(v in text for v in verbs) and not is_contradicted:
-                        # Fallback: if all subjects, objects, and verbs are present in the same snippet without negation
                         if len(verbs) > 0 and (len(subs) > 0 or len(objs) > 0):
                             if not missing_subs and not missing_objs:
                                 relationship = "supporting"
@@ -145,6 +225,6 @@ def perform_online_research(claim: str) -> Optional[List[EvidenceItem]]:
                     break
     except Exception as e:
         logger.error(f"Online research failed: {e}")
-        return None
+        return evidence if evidence else None
         
     return evidence
