@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
@@ -9,7 +10,7 @@ import '../../models/news_article.dart';
 
 class HomeScreen extends StatefulWidget {
   final VoidCallback onCheckNewsPressed;
-  final Function(String) onCheckText; // Added callback to support checking an article text
+  final Function(String) onCheckText;
 
   const HomeScreen({super.key, required this.onCheckNewsPressed, required this.onCheckText});
 
@@ -17,7 +18,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final ApiService _apiService = ApiService();
   bool _isServerConnected = false;
   bool _isCheckingHealth = true;
@@ -25,12 +26,39 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isFetchingNews = false;
   NewsResponse? _newsResponse;
   String? _newsError;
+  DateTime? _lastFetchTime;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _checkServerStatus();
     _fetchNews();
+    _startRefreshTimer();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (_lastFetchTime == null || DateTime.now().difference(_lastFetchTime!).inMinutes >= 15) {
+        _fetchNews(forceRefresh: true);
+      }
+    }
+  }
+
+  void _startRefreshTimer() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(const Duration(minutes: 15), (timer) {
+      _fetchNews(forceRefresh: true);
+    });
   }
 
   Future<void> _fetchNews({bool forceRefresh = false}) async {
@@ -42,8 +70,18 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final res = await _apiService.fetchNews(forceRefresh: forceRefresh);
       if (mounted) {
+        if (forceRefresh && _newsResponse != null) {
+          final oldTitles = _newsResponse!.articles.map((a) => a.title).toSet();
+          final newTitles = res.articles.map((a) => a.title).toSet();
+          if (newTitles.difference(oldTitles).isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('No newer articles found.')),
+            );
+          }
+        }
         setState(() {
           _newsResponse = res;
+          _lastFetchTime = DateTime.now();
           _isFetchingNews = false;
         });
       }
@@ -55,6 +93,7 @@ class _HomeScreenState extends State<HomeScreen> {
           setState(() {
             _newsResponse = cache['news'] as NewsResponse;
             _newsError = 'CACHED — LAST UPDATED: ${cache['timestamp'].toString().split('.').first}';
+            _lastFetchTime = cache['timestamp'] as DateTime;
             _isFetchingNews = false;
           });
           return;
@@ -252,6 +291,17 @@ class _HomeScreenState extends State<HomeScreen> {
                         color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
                       ),
                     ),
+                    if (_lastFetchTime != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Last updated: ${_lastFetchTime!.toLocal().toString().split('.')[0]}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: isDark ? Colors.amber[200] : Colors.amber[800],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
                 IconButton(

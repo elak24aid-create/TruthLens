@@ -40,6 +40,20 @@ def perform_verification_pipeline(
     """
     start_time = time.time()
     
+    if extracted_metadata and extracted_metadata.ocr_status in ["OCR_UNAVAILABLE", "NO_TEXT_DETECTED"]:
+        return AnalysisResult(
+            verdict=VerdictEnum.UNVERIFIED,
+            confidence=0,
+            verification_mode=VerificationMode.OFFLINE,
+            language="Unknown",
+            summary=f"Media processing failed: {extracted_metadata.ocr_status}",
+            why_this_verdict=[f"The system reported: {extracted_metadata.ocr_status}"],
+            signals=[],
+            evidence=[],
+            extracted_metadata=extracted_metadata,
+            search_time_ms=0
+        )
+    
     # 1. Preprocess & Language
     preprocessed = preprocess_news_text(raw_text)
     lang_info = detect_language(preprocessed["cleaned_text"])

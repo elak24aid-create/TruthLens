@@ -22,11 +22,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
 
   void _signUp() async {
     if (_formKey.currentState!.validate()) {
+      setState(() {
+        _isLoading = true;
+      });
       try {
-        final success = await AuthService.register(_emailController.text, _passwordController.text);
+        final success = await AuthService.register(_emailController.text, _passwordController.text).timeout(
+          const Duration(seconds: 30),
+          onTimeout: () => throw Exception('Request timed out. Server might be waking up.'),
+        );
         if (success && mounted) {
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(
@@ -43,6 +50,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
           );
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
         }
       }
     }
@@ -127,13 +140,22 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     width: double.infinity,
                     height: 48,
                     child: FilledButton(
-                      onPressed: _signUp,
-                      child: const Text('Sign Up'),
+                      onPressed: _isLoading ? null : _signUp,
+                      child: _isLoading 
+                        ? const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                              SizedBox(width: 12),
+                              Text('Signing up...'),
+                            ],
+                          )
+                        : const Text('Sign Up'),
                     ),
                   ),
                   const SizedBox(height: 16),
                   TextButton(
-                    onPressed: () {
+                    onPressed: _isLoading ? null : () {
                       Navigator.pop(context);
                     },
                     child: const Text('Already have an account? Sign In'),

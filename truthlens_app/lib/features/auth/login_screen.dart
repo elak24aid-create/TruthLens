@@ -21,11 +21,18 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
 
   void _login() async {
     if (_formKey.currentState!.validate()) {
+      setState(() {
+        _isLoading = true;
+      });
       try {
-        final success = await AuthService.login(_emailController.text, _passwordController.text);
+        final success = await AuthService.login(_emailController.text, _passwordController.text).timeout(
+          const Duration(seconds: 30),
+          onTimeout: () => throw Exception('Request timed out. Server might be waking up.'),
+        );
         if (success && mounted) {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
@@ -41,6 +48,12 @@ class _LoginScreenState extends State<LoginScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
           );
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
         }
       }
     }
@@ -92,13 +105,22 @@ class _LoginScreenState extends State<LoginScreen> {
                     width: double.infinity,
                     height: 48,
                     child: FilledButton(
-                      onPressed: _login,
-                      child: const Text('Login'),
+                      onPressed: _isLoading ? null : _login,
+                      child: _isLoading 
+                        ? const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                              SizedBox(width: 12),
+                              Text('Signing in... (Waking secure server)'),
+                            ],
+                          )
+                        : const Text('Login'),
                     ),
                   ),
                   const SizedBox(height: 16),
                   TextButton(
-                    onPressed: () {
+                    onPressed: _isLoading ? null : () {
                       _emailController.text = 'demo@example.com';
                       _passwordController.text = 'password';
                       _login();
@@ -107,7 +129,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 8),
                   TextButton(
-                    onPressed: () {
+                    onPressed: _isLoading ? null : () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => SignUpScreen(

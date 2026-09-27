@@ -1,3 +1,4 @@
+from functools import lru_cache
 import urllib.request
 import urllib.parse
 import ipaddress
@@ -33,6 +34,7 @@ def is_safe_url(url: str) -> bool:
     except Exception:
         return False
 
+@lru_cache(maxsize=100)
 def fetch_and_extract_article(url: str) -> dict:
     """
     Safely fetches the URL and extracts metadata + text.

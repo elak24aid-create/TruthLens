@@ -3,7 +3,9 @@ from ddgs import DDGS
 from app.schemas.common import EvidenceItem
 from datetime import datetime
 import re
+from functools import lru_cache
 
+@lru_cache(maxsize=100)
 def perform_online_research(claim: str) -> Optional[List[EvidenceItem]]:
     """
     Use duckduckgo-search to query fact-checking sites and general news.
@@ -53,13 +55,7 @@ def perform_online_research(claim: str) -> Optional[List[EvidenceItem]]:
                     elif re.search(r'\b(true|accurate|confirmed)\b', lower_body):
                         relationship = 'supporting'
                     else:
-                        # Fallback to Jaccard similarity for factual statements
-                        claim_words = set(re.findall(r'\w+', query_text.lower()))
-                        title_words = set(re.findall(r'\w+', lower_title))
-                        if len(claim_words) > 3 and len(title_words.intersection(claim_words)) / len(claim_words) > 0.4:
-                            relationship = 'supporting'
-                        else:
-                            relationship = 'context'
+                        relationship = 'context'
                 
                 source = url.split('/')[2] if url else 'Unknown'
                 if source.startswith('www.'):
