@@ -12,7 +12,7 @@ from app.services.google_service import GoogleVerificationService
 from app.services.google_fact_check_service import GoogleFactCheckService
 from app.services.ocr_service import extract_text_from_image
 from app.services.video_service import extract_text_from_video
-from app.schemas.common import VerificationMode, EvidenceItem
+from app.schemas.common import VerificationMode, EvidenceItem, VerdictEnum
 import logging
 
 logger = logging.getLogger(__name__)
