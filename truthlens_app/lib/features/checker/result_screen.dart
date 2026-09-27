@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'share_helper.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../models/analysis_result.dart';
 import '../../models/evidence_item.dart';
 import '../../widgets/verdict_badge.dart';
@@ -11,6 +11,7 @@ import '../../services/api_service.dart';
 import '../../services/local_history_service.dart';
 import '../../models/history_item.dart';
 import '../../models/research_result.dart';
+import '../../services/saved_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ResultScreen extends StatefulWidget {
@@ -38,7 +39,10 @@ class ResultScreen extends StatefulWidget {
 class _ResultScreenState extends State<ResultScreen> {
   final ApiService _apiService = ApiService();
   final LocalHistoryService _localHistoryService = LocalHistoryService();
+  final _savedService = SavedService();
   bool _isSaved = false;
+  bool _isBookmarked = false;
+  String _currentNote = '';
 
   @override
   void initState() {
@@ -98,7 +102,55 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 
 
+  Future<void> _saveToBookmarks({String? note}) async {
+    final saved = SavedResult(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      claim: widget.originalText,
+      result: widget.result,
+      date: DateTime.now().toIso8601String(),
+      note: note,
+    );
+    await _savedService.saveResult(saved);
+    if (mounted) {
+      setState(() {
+        _isBookmarked = true;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Result saved to Bookmarks.'), behavior: SnackBarBehavior.floating),
+      );
+    }
+  }
+
+  void _addNote() {
+    final noteController = TextEditingController(text: _currentNote);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Note'),
+        content: TextField(
+          controller: noteController,
+          decoration: const InputDecoration(hintText: 'Enter your note here...'),
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                _currentNote = noteController.text;
+              });
+              _saveToBookmarks(note: _currentNote);
+              Navigator.pop(context);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSourceItem(EvidenceItem source, bool isDark) {
+
     IconData icon;
     Color iconColor;
     if (source.relationship == 'supporting') {
@@ -207,23 +259,11 @@ class _ResultScreenState extends State<ResultScreen> {
 
   String _buildShareText() {
     final buffer = StringBuffer();
-    buffer.writeln('TRUTHLENS VERIFICATION');
-    buffer.writeln();
+    buffer.writeln('TruthLens Fact Check');
+    buffer.writeln('Claim: ${widget.originalText}');
     buffer.writeln('Verdict: ${widget.result.verdict.displayName}');
     buffer.writeln('Confidence: ${widget.result.confidence ?? "N/A"}%');
-    buffer.writeln('Input Type: ${widget.inputType.toUpperCase()}');
-    buffer.writeln();
-    buffer.writeln('Why This Verdict:');
-    buffer.writeln(_generateDynamicExplanation());
-    buffer.writeln();
-    if (widget.result.evidence.isNotEmpty) {
-      buffer.writeln('Online Evidence: ${widget.result.evidence.length} available sources');
-    }
-    buffer.writeln();
-    buffer.writeln('Limitations:');
-    buffer.writeln('ML classification is probabilistic. Online evidence may be incomplete. Source availability does not prove truth. Lack of evidence does not mean false. The system may make mistakes. Media OCR only analyzes extracted text, not manipulation.');
-    buffer.writeln();
-    buffer.writeln('Checked with TruthLens.');
+    buffer.writeln('Explanation: ${_generateDynamicExplanation()}');
     return buffer.toString();
   }
 
@@ -239,10 +279,7 @@ class _ResultScreenState extends State<ResultScreen> {
 
   Future<void> _shareResult() async {
     final text = _buildShareText();
-    bool shared = await shareTextWeb('TruthLens Verification Result', text);
-    if (!shared) {
-      await _copySummary();
-    }
+    await Share.share(text);
   }
 
   void _showReportDialog() {
@@ -648,6 +685,16 @@ class _ResultScreenState extends State<ResultScreen> {
                   onPressed: () => Navigator.pop(context),
                   icon: const Icon(Icons.refresh, size: 18),
                   label: const Text('Check Another'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _saveToBookmarks,
+                  icon: const Icon(Icons.bookmark_add, size: 18),
+                  label: const Text('Save Result'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _addNote,
+                  icon: const Icon(Icons.note_add, size: 18),
+                  label: const Text('Add Note'),
                 ),
                 OutlinedButton.icon(
                   onPressed: _shareResult,

@@ -28,6 +28,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String? _newsError;
   DateTime? _lastFetchTime;
   Timer? _refreshTimer;
+  String _selectedCategory = 'All';
+  final TextEditingController _searchController = TextEditingController();
+  final List<String> _categories = ['All', 'India', 'World', 'Technology', 'Science', 'Sports', 'Business', 'Health'];
 
   @override
   void initState() {
@@ -42,6 +45,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _refreshTimer?.cancel();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -68,7 +72,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
     
     try {
-      final res = await _apiService.fetchNews(forceRefresh: forceRefresh);
+      final res = await _apiService.fetchNews(
+        forceRefresh: forceRefresh,
+        query: _searchController.text,
+        category: _selectedCategory,
+      );
       if (mounted) {
         if (forceRefresh && _newsResponse != null) {
           final oldTitles = _newsResponse!.articles.map((a) => a.title).toSet();
@@ -177,8 +185,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+      body: RefreshIndicator(
+        onRefresh: () => _fetchNews(forceRefresh: true),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -266,6 +277,49 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               isDark: isDark,
             ),
 
+            const SizedBox(height: 24),
+            TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search news...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    _searchController.clear();
+                    _fetchNews(forceRefresh: true);
+                  },
+                ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              ),
+              onSubmitted: (_) => _fetchNews(forceRefresh: true),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 40,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: _categories.length,
+                itemBuilder: (context, index) {
+                  final cat = _categories[index];
+                  final isSelected = cat == _selectedCategory;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8.0),
+                    child: ChoiceChip(
+                      label: Text(cat),
+                      selected: isSelected,
+                      onSelected: (selected) {
+                        if (selected) {
+                          setState(() => _selectedCategory = cat);
+                          _fetchNews(forceRefresh: true);
+                        }
+                      },
+                    ),
+                  );
+                },
+              ),
+            ),
             const SizedBox(height: 24),
 
             // Latest Public Dispatches (Live News)
@@ -370,6 +424,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ..._newsResponse!.articles.map((article) => _buildDynamicFeedCard(article, isDark)).toList(),
           ],
         ),
+      ),
       ),
     );
   }

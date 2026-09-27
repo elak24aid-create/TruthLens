@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../home/home_screen.dart';
 import '../checker/checker_screen.dart';
 import '../history/history_screen.dart';
-import '../reports/community_reports_screen.dart';
+import '../saved/saved_screen.dart';
 import '../profile/profile_screen.dart';
 import '../../core/constants/app_colors.dart';
 
@@ -44,7 +44,7 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
       ) : const SizedBox.shrink(),
       _visitedTabs[1] ? CheckerScreen(initialText: _checkerInitialText) : const SizedBox.shrink(),
       _visitedTabs[2] ? const HistoryScreen() : const SizedBox.shrink(),
-      _visitedTabs[3] ? const CommunityReportsScreen() : const SizedBox.shrink(),
+      _visitedTabs[3] ? const SavedScreen() : const SizedBox.shrink(),
       _visitedTabs[4] ? ProfileScreen(
         currentThemeMode: widget.currentThemeMode,
         onThemeModeChanged: widget.onThemeModeChanged,
@@ -82,9 +82,9 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
             label: 'History',
           ),
           NavigationDestination(
-            icon: Icon(Icons.report_outlined),
-            selectedIcon: Icon(Icons.report, color: AppColors.primaryLight),
-            label: 'Reports',
+            icon: Icon(Icons.bookmark_border),
+            selectedIcon: Icon(Icons.bookmark, color: AppColors.primaryLight),
+            label: 'Saved',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline),

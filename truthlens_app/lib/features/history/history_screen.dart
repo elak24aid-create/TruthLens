@@ -89,9 +89,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   List<HistoryItem> get _filteredItems {
     return _items.where((item) {
+      final title = item.analysisResult?.extractedMetadata?['title']?.toString() ?? '';
+      final source = item.analysisResult?.extractedMetadata?['source_name']?.toString() ?? '';
+      
       final matchesSearch = _searchQuery.isEmpty ||
           item.textSnippet.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          item.summary.toLowerCase().contains(_searchQuery.toLowerCase());
+          item.summary.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          source.toLowerCase().contains(_searchQuery.toLowerCase());
+          
       final matchesVerdict = _selectedFilter == null || item.verdict == _selectedFilter;
       final matchesInput = _selectedInputFilter == null || item.inputType == _selectedInputFilter;
       return matchesSearch && matchesVerdict && matchesInput;

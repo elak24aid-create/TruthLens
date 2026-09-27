@@ -170,11 +170,14 @@ class ApiService {
     }
   }
 
-  Future<NewsResponse> fetchNews({bool forceRefresh = false}) async {
+  Future<NewsResponse> fetchNews({bool forceRefresh = false, String? query, String? category}) async {
     try {
-      final uri = forceRefresh 
-          ? Uri.parse('${ApiConfig.newsEndpoint}?force_refresh=true')
-          : Uri.parse(ApiConfig.newsEndpoint);
+      final queryParams = <String, String>{};
+      if (forceRefresh) queryParams['force_refresh'] = 'true';
+      if (query != null && query.isNotEmpty) queryParams['query'] = query;
+      if (category != null && category.isNotEmpty && category != 'All') queryParams['category'] = category;
+
+      final uri = Uri.parse(ApiConfig.newsEndpoint).replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
       final response = await _client.get(uri).timeout(ApiConfig.requestTimeout);
       if (response.statusCode == 200) {
         final newsResp = NewsResponse.fromJson(jsonDecode(response.body));

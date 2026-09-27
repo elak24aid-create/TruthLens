@@ -33,7 +33,7 @@ class _CheckerScreenState extends State<CheckerScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) {
         setState(() {
@@ -177,8 +177,7 @@ class _CheckerScreenState extends State<CheckerScreen>
           unselectedLabelColor: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
           tabs: const [
             Tab(icon: Icon(Icons.article_outlined, size: 20), text: 'Text / Headline'),
-            Tab(icon: Icon(Icons.link_outlined, size: 20), text: 'Article URL'), Tab(icon: Icon(Icons.image_outlined, size: 20), text: 'Image'),
-            Tab(icon: Icon(Icons.video_library_outlined, size: 20), text: 'Video'),
+            Tab(icon: Icon(Icons.link_outlined, size: 20), text: 'Article URL'),
           ],
         ),
       ),
@@ -188,8 +187,7 @@ class _CheckerScreenState extends State<CheckerScreen>
           // Tab 1: Text Checker
           _buildTextTab(isDark),
           // Tab 2: URL Checker
-          _buildUrlTab(isDark), _buildImageTab(isDark),
-                  _buildVideoTab(isDark),
+          _buildUrlTab(isDark),
         ],
       ),
     );

@@ -22,11 +22,7 @@ class ApiConfig {
     const envUrl = String.fromEnvironment('API_BASE_URL');
     if (envUrl.isNotEmpty) return envUrl;
     
-    // Use production URL if built in release mode, otherwise use local dev host
-    if (kReleaseMode) {
-      return productionUrl;
-    }
-    return 'http://$defaultHost:8000/api';
+    return productionUrl;
   }
 
   static String get healthEndpoint => '$baseUrl/health';

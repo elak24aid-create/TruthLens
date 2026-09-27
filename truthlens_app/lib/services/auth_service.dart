@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:truthlens_app/config/api_config.dart';
+import 'package:truthlens_app/services/storage_service.dart';
 
 class AuthService {
   static String get baseUrl => '${ApiConfig.baseUrl}/auth';
@@ -35,6 +36,7 @@ class AuthService {
     }
     await prefs.remove(tokenKey);
     await prefs.remove(emailKey);
+    await StorageService.logout();
   }
 
   static Future<bool> login(String email, String password) async {
@@ -47,6 +49,7 @@ class AuthService {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         await setToken(data['token'], data['email']);
+        await StorageService.saveUser({'email': data['email'], 'name': data['name'] ?? data['email'].split('@')[0]});
         return true;
       } else if (response.statusCode == 401) {
         throw Exception('Invalid credentials');
@@ -72,6 +75,7 @@ class AuthService {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         await setToken(data['token'], data['email']);
+        await StorageService.saveUser({'email': data['email'], 'name': data['name'] ?? data['email'].split('@')[0]});
         return true;
       } else if (response.statusCode == 400) {
         throw Exception('Email already registered');
