@@ -1,68 +1,131 @@
 import requests
 import time
 import json
-import os
+import uuid
 
 BASE_URL = "https://truthlens-l1vq.onrender.com/api"
+session = requests.Session()
 
-print("--- 1. HEALTH ---")
+def print_section(title):
+    print(f"\n{'='*50}\n{title}\n{'='*50}")
+
+# 1. HEALTH
+print_section("1. HEALTH")
+t0 = time.time()
+r = session.get(f"{BASE_URL}/health", timeout=30)
+t1 = time.time()
+print(f"Status: {r.status_code} ({t1-t0:.2f}s)")
+print("Body:", r.json())
+
+# 2. IMAGE OCR
+print_section("2. IMAGE OCR")
 try:
-    r = requests.get(f"{BASE_URL}/health", timeout=60)
-    print("Status:", r.status_code)
-    print("Body:", r.json())
-except Exception as e:
-    print("Health failed:", e)
-
-print("\n--- 2. NEWS ---")
-try:
-    r = requests.get(f"{BASE_URL}/news", timeout=60)
-    print("Status:", r.status_code)
-    data = r.json()
-    print("Articles count:", len(data.get("articles", [])))
-    if data.get("articles"):
-        print("First article:", data["articles"][0]["title"])
-except Exception as e:
-    print("News failed:", e)
-
-print("\n--- 3. FACT-CHECK LOGIC REGRESSION (TEXT) ---")
-test_claims = [
-    {"text": "Obama is the president of India.", "expected": "Not Genuine"},
-    {"text": "The Sun is a star.", "expected": "Genuine / Insufficient"},
-    {"text": "Covid-19 is caused by 5G cell towers.", "expected": "False / Misleading"}
-]
-
-for claim in test_claims:
-    print(f"\nTesting Claim: {claim['text']}")
-    try:
-        t0 = time.time()
-        r = requests.post(f"{BASE_URL}/check-text", json={"text": claim["text"]}, timeout=60)
-        t1 = time.time()
-        print(f"Status: {r.status_code} ({t1-t0:.2f}s)")
-        if r.status_code == 200:
-            data = r.json()
-            print("Verdict:", data.get("verdict"))
-            print("Summary:", data.get("summary"))
-        else:
-            print("Body:", r.text)
-    except Exception as e:
-        print("Check Text failed:", e)
-
-print("\n--- 4. URL ---")
-try:
-    r = requests.post(f"{BASE_URL}/check-url", json={"url": "https://en.wikipedia.org/wiki/Earth"}, timeout=60)
-    print("Status:", r.status_code)
-    print("Verdict:", r.json().get("verdict"))
-except Exception as e:
-    print("URL check failed:", e)
-
-print("\n--- 5. IMAGE OCR ---")
-try:
+    t0 = time.time()
     with open("test_ocr.jpg", "rb") as f:
-        r = requests.post(f"{BASE_URL}/check-image", files={"file": f}, timeout=60)
-    print("Status:", r.status_code)
-    data = r.json()
-    print("Verdict:", data.get("verdict"))
-    print("Extracted Text:", data.get("extracted_metadata", {}).get("ocr_text"))
-    print("OCR Status:", data.get("extracted_metadata", {}).get("ocr_status"))
+        r = session.post(f"{BASE_URL}/check-image", files={"file": ("test_ocr.jpg", f, "image/jpeg")}, timeout=60)
+    t1 = time.time()
+    print(f"Status: {r.status_code} ({t1-t0:.2f}s)")
+    if r.status_code == 200:
+        data = r.json()
+        print("Verdict:", data.get("verdict"))
+        print("Extracted Text:", data.get("extracted_metadata", {}).get("ocr_text"))
+        print("OCR Status:", data.get("extracted_metadata", {}).get("ocr_status"))
+    else:
+        print("Body:", r.text)
 except Exception as e:
-    print("Image check failed:", e)
+    print("Error:", e)
+
+# 3. VIDEO OCR
+print_section("3. VIDEO OCR")
+try:
+    t0 = time.time()
+    with open("test_video.mp4", "rb") as f:
+        r = session.post(f"{BASE_URL}/check-video", files={"file": ("test_video.mp4", f, "video/mp4")}, timeout=60)
+    t1 = time.time()
+    print(f"Status: {r.status_code} ({t1-t0:.2f}s)")
+    if r.status_code == 200:
+        data = r.json()
+        print("Verdict:", data.get("verdict"))
+        print("Extracted Text:", data.get("extracted_metadata", {}).get("ocr_text"))
+        print("OCR Status:", data.get("extracted_metadata", {}).get("ocr_status"))
+    else:
+        print("Body:", r.text)
+except Exception as e:
+    print("Error:", e)
+
+# 4. TEXT FACT-CHECK
+print_section("4. TEXT FACT-CHECK")
+claims = [
+    "Obama is the president of India",
+    "The Sun is a star.",
+    "Humans have landed on Mars."
+]
+for claim in claims:
+    t0 = time.time()
+    r = session.post(f"{BASE_URL}/check-text", json={"text": claim}, timeout=60)
+    t1 = time.time()
+    print(f"\nClaim: {claim}")
+    print(f"Status: {r.status_code} ({t1-t0:.2f}s)")
+    if r.status_code == 200:
+        d = r.json()
+        print("Verdict:", d.get("verdict"))
+        print("Confidence:", d.get("confidence"))
+        print("Evidence Count:", len(d.get("evidence", [])))
+    else:
+        print("Body:", r.text)
+
+# 5. URL CHECK
+print_section("5. URL CHECK")
+t0 = time.time()
+r = session.post(f"{BASE_URL}/check-url", json={"url": "https://en.wikipedia.org/wiki/Earth"}, timeout=60)
+t1 = time.time()
+print(f"Status: {r.status_code} ({t1-t0:.2f}s)")
+if r.status_code == 200:
+    d = r.json()
+    print("Verdict:", d.get("verdict"))
+    print("Evidence Count:", len(d.get("evidence", [])))
+    print("Claims Found:", d.get("extracted_metadata", {}).get("claims_found"))
+else:
+    print("Body:", r.text)
+
+# 6. NEWS
+print_section("6. NEWS")
+t0 = time.time()
+r = session.get(f"{BASE_URL}/news", timeout=60)
+t1 = time.time()
+print(f"Status: {r.status_code} ({t1-t0:.2f}s)")
+if r.status_code == 200:
+    d = r.json()
+    arts = d.get("articles", [])
+    print(f"Articles: {len(arts)}")
+    if arts:
+        print(f"First Article: {arts[0]['title']} | URL: {arts[0]['url']} | Published: {arts[0]['published_at']}")
+else:
+    print("Body:", r.text)
+
+# 7. AUTH / HISTORY / REPORTS
+print_section("7. AUTH / HISTORY / REPORTS")
+email = f"test_{uuid.uuid4().hex[:8]}@example.com"
+pw = "Testpass123!"
+
+# Register
+r = session.post(f"{BASE_URL}/auth/register", json={"email": email, "password": pw, "full_name": "Test User"}, timeout=30)
+print(f"Register Status: {r.status_code}")
+
+# Login
+r = session.post(f"{BASE_URL}/auth/login", json={"email": email, "password": pw}, timeout=30)
+print(f"Login Status: {r.status_code}")
+token = None
+if r.status_code == 200:
+    token = r.json().get("token")
+
+if token:
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    # History
+    r = session.get(f"{BASE_URL}/history", headers=headers, timeout=30)
+    print(f"History Status: {r.status_code}")
+    
+    # Reports
+    r = session.get(f"{BASE_URL}/report", headers=headers, timeout=30)
+    print(f"Reports Status: {r.status_code}")

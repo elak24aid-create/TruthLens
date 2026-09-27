@@ -500,22 +500,44 @@ class _ResultScreenState extends State<ResultScreen> {
                           padding: const EdgeInsets.only(bottom: 4),
                           child: Text('Video Duration: ${result.extractedMetadata!['duration_sec'] ?? '?'}s | Frames: ${result.extractedMetadata!['frames_sampled'] ?? '?'}', style: const TextStyle(fontSize: 13)),
                         ),
-                      if (result.extractedMetadata!['ocr_text'] != null)
+                      if (result.extractedMetadata!['ocr_text'] != null && result.extractedMetadata!['ocr_text'].toString().isNotEmpty) ...[
                         const Padding(
                           padding: EdgeInsets.only(top: 8, bottom: 4),
                           child: Text('OCR Text:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                         ),
-                    ],
-                    Text(
-                      widget.originalText,
-                      maxLines: 4,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontStyle: FontStyle.italic,
-                        color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                      ),
-                    ),
+                        Text(
+                          result.extractedMetadata!['ocr_text'].toString(),
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontStyle: FontStyle.italic,
+                            color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                          ),
+                        ),
+                      ] else if (widget.inputType == 'image' || widget.inputType == 'video') ...[
+                        const Padding(
+                          padding: EdgeInsets.only(top: 8, bottom: 4),
+                          child: Text('OCR Status:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        ),
+                        Text(
+                          result.extractedMetadata!['ocr_status']?.toString() ?? 'Could not detect readable text in this media.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontStyle: FontStyle.italic,
+                            color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                          ),
+                        ),
+                      ] else ...[
+                        Text(
+                          widget.originalText,
+                          maxLines: 4,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontStyle: FontStyle.italic,
+                            color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                          ),
+                        ),
+                      ]
                   ],
                 ),
               ),

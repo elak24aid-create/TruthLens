@@ -28,6 +28,7 @@ def fetch_and_normalize_news() -> List[NewsArticle]:
     articles = []
     seen_urls = set()
     seen_titles = set()
+    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
 
     for source in RSS_SOURCES:
         try:
@@ -35,7 +36,7 @@ def fetch_and_normalize_news() -> List[NewsArticle]:
             if not feed.entries:
                 continue
             
-            for entry in feed.entries[:10]: # limit per source
+            for entry in feed.entries:
                 title = entry.get("title", "").strip()
                 link = entry.get("link", "").strip()
                 description = entry.get("summary", "")
@@ -44,6 +45,16 @@ def fetch_and_normalize_news() -> List[NewsArticle]:
                 if not title or not link:
                     continue
                 
+                # Extract date
+                if hasattr(entry, "published_parsed") and entry.published_parsed:
+                    dt = datetime.utcfromtimestamp(time.mktime(entry.published_parsed))
+                else:
+                    # If we can't reliably parse the date, skip it to enforce 1-hour rule strictly
+                    continue
+
+                if dt < one_hour_ago:
+                    continue
+
                 # Duplicate checking
                 normalized_title = title.lower()
                 if link in seen_urls or normalized_title in seen_titles:
@@ -52,15 +63,7 @@ def fetch_and_normalize_news() -> List[NewsArticle]:
                 seen_urls.add(link)
                 seen_titles.add(normalized_title)
                 
-                # Extract date if possible
-                pub_date_str = ""
-                if hasattr(entry, "published_parsed") and entry.published_parsed:
-                    dt = datetime.fromtimestamp(time.mktime(entry.published_parsed))
-                    pub_date_str = dt.isoformat() + "Z"
-                elif hasattr(entry, "published"):
-                    pub_date_str = entry.published
-                else:
-                    pub_date_str = datetime.utcnow().isoformat() + "Z"
+                pub_date_str = dt.isoformat() + "Z"
 
                 articles.append(NewsArticle(
                     title=title,
@@ -68,13 +71,13 @@ def fetch_and_normalize_news() -> List[NewsArticle]:
                     url=link,
                     source_name=source["name"],
                     published_at=pub_date_str,
-                    image_url=None, # Extracting image from RSS reliably is complex; skip for simplicity
+                    image_url=None, 
                     category="General"
                 ))
         except Exception as e:
             logger.error(f"Error fetching RSS feed {source['name']}: {e}")
             
-    # Sort by published_at descending (assuming ISO strings or best effort)
+    # Sort by published_at descending
     articles.sort(key=lambda x: x.published_at, reverse=True)
     return articles
 

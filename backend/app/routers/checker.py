@@ -59,8 +59,10 @@ def perform_verification_pipeline(
     lang_info = detect_language(preprocessed["cleaned_text"])
     source_info = analyze_source_credibility(preprocessed["cleaned_text"])
 
-    # Extract query logic
-    query_text = preprocessed["cleaned_text"][:300] if preprocessed["cleaned_text"] else ""
+    # Extract query logic: For URLs or long text, use the headline to avoid overly long queries
+    query_text = preprocessed["headline"] if preprocessed["headline"] else preprocessed["cleaned_text"]
+    if len(query_text) > 120:
+        query_text = query_text[:120]
 
     # 2. Local ML Baseline (always computed but may be overridden)
     predictor = get_predictor()

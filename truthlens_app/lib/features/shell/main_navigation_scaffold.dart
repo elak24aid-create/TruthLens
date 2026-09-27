@@ -23,10 +23,12 @@ class MainNavigationScaffold extends StatefulWidget {
 class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   int _currentIndex = 0;
   String? _checkerInitialText;
+  final List<bool> _visitedTabs = [true, false, false, false, false];
 
   void _navigateToTab(int index, {String? initialText}) {
     setState(() {
       _currentIndex = index;
+      _visitedTabs[index] = true;
       if (initialText != null) {
         _checkerInitialText = initialText;
       }
@@ -36,17 +38,17 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   @override
   Widget build(BuildContext context) {
     final screens = [
-      HomeScreen(
+      _visitedTabs[0] ? HomeScreen(
         onCheckNewsPressed: () => _navigateToTab(1),
         onCheckText: (text) => _navigateToTab(1, initialText: text),
-      ),
-      CheckerScreen(initialText: _checkerInitialText),
-      const HistoryScreen(),
-      const CommunityReportsScreen(),
-      ProfileScreen(
+      ) : const SizedBox.shrink(),
+      _visitedTabs[1] ? CheckerScreen(initialText: _checkerInitialText) : const SizedBox.shrink(),
+      _visitedTabs[2] ? const HistoryScreen() : const SizedBox.shrink(),
+      _visitedTabs[3] ? const CommunityReportsScreen() : const SizedBox.shrink(),
+      _visitedTabs[4] ? ProfileScreen(
         currentThemeMode: widget.currentThemeMode,
         onThemeModeChanged: widget.onThemeModeChanged,
-      ),
+      ) : const SizedBox.shrink(),
     ];
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
