@@ -184,6 +184,8 @@ Instructions:
 
         except APIError as e:
             logger.error(f"Gemini API Error: {e}")
+            if e.code in [429, 403]:
+                return {"status": "error", "reason": "FREE LIMIT REACHED"}
             return {"status": "error", "reason": f"API Error: {e.code}"}
         except Exception as e:
             logger.error(f"Google Service Error: {e}")

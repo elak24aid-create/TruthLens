@@ -65,7 +65,7 @@ def aggregate_evidence(
     conflicting_count = sum(1 for e in evidence_items if e.relationship == "conflicting")
     wiki_conflict = any(e.publisher == "wikipedia" and e.relationship == "conflicting" for e in evidence_items)
 
-    # Base signals logic for insufficient text
+    # Base signals logic for insufficient text (only if NO evidence at all was found)
     if word_count < 5 and not wiki_conflict and conflicting_count == 0 and supporting_count == 0 and not (extracted_metadata and extracted_metadata.claims_found) and content_not_media(extracted_metadata):
         return AnalysisResult(
             verdict=VerdictEnum.INSUFFICIENT_EVIDENCE,

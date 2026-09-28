@@ -14,7 +14,17 @@ logger = logging.getLogger(__name__)
 
 # Simple in-memory cache keyed by (category, query)
 _NEWS_CACHE = {}
-CACHE_TTL_SECONDS = 600  # 10 minutes (user requested refresh every 10 min)
+CACHE_TTL_SECONDS = 240  # 4 minutes
+
+def parse_gdelt_date(date_str: str) -> str:
+    try:
+        # GDELT format: 20260928T031500Z
+        if len(date_str) == 16 and 'T' in date_str and date_str.endswith('Z'):
+            dt = datetime.strptime(date_str, "%Y%m%dT%H%M%SZ")
+            return dt.isoformat() + "Z"
+    except Exception:
+        pass
+    return datetime.utcnow().isoformat() + "Z"
 
 def fetch_gdelt(query: str, limit: int) -> List[NewsArticle]:
     articles = []
@@ -31,12 +41,16 @@ def fetch_gdelt(query: str, limit: int) -> List[NewsArticle]:
                     url = item.get("url", "")
                     if not title or not url:
                         continue
+                        
+                    raw_date = item.get("seendate", "")
+                    published_at = parse_gdelt_date(raw_date) if raw_date else datetime.utcnow().isoformat() + "Z"
+                    
                     articles.append(NewsArticle(
                         title=title,
                         description=title, # GDELT artlist often doesn't give a good snippet
                         url=url,
                         source_name=item.get("domain", "GDELT Source"),
-                        published_at=item.get("seendate", datetime.utcnow().isoformat() + "Z"),
+                        published_at=published_at,
                         image_url=item.get("socialimage", None),
                         category=query
                     ))

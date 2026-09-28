@@ -32,8 +32,12 @@ class GoogleFactCheckService:
                 "languageCode": "en-US"
             }
             
-            response = requests.get(self.base_url, params=params, timeout=5)
+            response = requests.get(self.base_url, params=params, timeout=3)
             
+            if response.status_code in [429, 403]:
+                logger.warning(f"Fact Check API rate limited or forbidden ({response.status_code})")
+                return None
+                
             if response.status_code != 200:
                 logger.warning(f"Fact Check API returned {response.status_code}: {response.text}")
                 return None
