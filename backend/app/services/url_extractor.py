@@ -1,3 +1,4 @@
+import re
 from functools import lru_cache
 import urllib.request
 import urllib.parse
@@ -114,18 +115,16 @@ def fetch_and_extract_article(url: str) -> dict:
     if not article_text.strip():
         raise ValueError("Could not extract any text from the article.")
 
-    # Formulate claim text for searching
-    claim_text = title
-    if description and len(claim_text) < 60:
-        claim_text += " - " + description
-    
-    # If title/desc are empty or very short, use the first chunk of text
-    if len(claim_text) < 30:
-        first_sentence = article_text.split('.')[0]
-        claim_text += " - " + first_sentence[:100]
+        # Formulate claim text for searching
+    clean_title = re.split(r'[-|]', title)[0].strip()
+    claim_text = clean_title
+    if len(claim_text) < 40 and description:
+        claim_text += ' ' + description
+        
+    claim_text = claim_text[:80].strip()
+    if not claim_text:
+        claim_text = title[:80]
 
-    if len(claim_text) > 150:
-        claim_text = claim_text[:147] + "..."
 
     return {
         "title": title,
