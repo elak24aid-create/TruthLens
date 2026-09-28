@@ -1,10 +1,11 @@
 import logging
 from typing import List, Dict, Any, Optional
-from app.models.schemas import (
+from app.schemas.common import (
     VerdictEnum, SignalStatusEnum, VerificationMode,
-    SignalItem, AnalysisResult, ExtractedMetadata
+    SignalItem
 )
-from app.schemas.evidence import EvidenceItem
+from app.schemas.checker import AnalysisResult, ExtractedMetadata
+from app.schemas.common import EvidenceItem
 
 logger = logging.getLogger(__name__)
 
