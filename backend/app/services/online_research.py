@@ -113,21 +113,38 @@ def perform_online_research(claim: str) -> Optional[List[EvidenceItem]]:
     if not query_text:
         return []
         
-    # Handle known math/logic falsehoods explicitly since Spacy won't catch them
-    if "2 + 2 = 5" in query_text or "2+2=5" in query_text:
-        evidence.append(EvidenceItem(
-            source_type="web_search",
-            publisher="wikipedia",
-            title="Wikipedia: 2 + 2 = 5",
-            url="https://en.wikipedia.org/wiki/2_%2B_2_%3D_5",
-            domain="wikipedia.org",
-            relationship="conflicting",
-            published_date=None,
-            retrieved_at=datetime.now().isoformat(),
-            citation_type="Article",
-            evidence_excerpt="2 + 2 = 5 is a mathematical falsehood used as an example of an obviously false dogma."
-        ))
-        return evidence
+    # Generalized mathematical-expression check
+    # Looks for a simple equation like "X + Y = Z"
+    math_match = re.search(r'^([0-9\s\+\-\*\/\(\)\.]+)\s*=\s*([0-9\.\-]+)$', query_text)
+    if math_match:
+        left_expr = math_match.group(1).strip()
+        right_val = math_match.group(2).strip()
+        try:
+            # Safely evaluate basic math
+            # Filter out any malicious builtins by restricting globals/locals
+            allowed_chars = set("0123456789+-*/(). ")
+            if all(c in allowed_chars for c in left_expr):
+                calculated = eval(left_expr, {"__builtins__": None}, {})
+                is_correct = (abs(float(calculated) - float(right_val)) < 1e-5)
+                
+                rel = "supporting" if is_correct else "conflicting"
+                desc = f"Mathematical evaluation of '{left_expr}' equals {calculated}, which means the statement '{query_text}' is {is_correct}."
+                
+                evidence.append(EvidenceItem(
+                    source_type="computational",
+                    publisher="math_evaluator",
+                    title="Mathematical Evaluation",
+                    url="local://math",
+                    domain="local",
+                    relationship=rel,
+                    published_date=datetime.utcnow().isoformat() + "Z",
+                    retrieved_at=datetime.utcnow().isoformat() + "Z",
+                    citation_type="Calculation",
+                    evidence_excerpt=desc
+                ))
+                return evidence
+        except Exception:
+            pass
         
     wiki_ev = check_identity(query_text)
     if wiki_ev:
