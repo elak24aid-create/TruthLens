@@ -58,6 +58,31 @@ def fetch_gdelt(query: str, limit: int) -> List[NewsArticle]:
         logger.warning(f"GDELT fetch failed: {e}")
     return articles
 
+import re
+
+def parse_ddgs_date(date_str: str) -> str:
+    if not date_str:
+        return datetime.utcnow().isoformat() + "Z"
+    if "h" in date_str.lower() and "t" not in date_str.lower():
+        try:
+            h = int(re.search(r'\d+', date_str).group())
+            return (datetime.utcnow() - timedelta(hours=h)).isoformat() + "Z"
+        except:
+            pass
+    elif "d" in date_str.lower() and "t" not in date_str.lower():
+        try:
+            d = int(re.search(r'\d+', date_str).group())
+            return (datetime.utcnow() - timedelta(days=d)).isoformat() + "Z"
+        except:
+            pass
+    elif "m" in date_str.lower() and "t" not in date_str.lower():
+        try:
+            m = int(re.search(r'\d+', date_str).group())
+            return (datetime.utcnow() - timedelta(minutes=m)).isoformat() + "Z"
+        except:
+            pass
+    return date_str
+
 def fetch_ddgs(query: str, limit: int) -> List[NewsArticle]:
     articles = []
     try:
@@ -73,7 +98,7 @@ def fetch_ddgs(query: str, limit: int) -> List[NewsArticle]:
                     description=res.get("body", ""),
                     url=url,
                     source_name=res.get("source", "News Source"),
-                    published_at=res.get("date", datetime.utcnow().isoformat() + "Z"),
+                    published_at=parse_ddgs_date(res.get("date", "")),
                     image_url=res.get("image", None),
                     category=query
                 ))

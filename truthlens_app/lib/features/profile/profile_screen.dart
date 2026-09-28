@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../main.dart' as import_main;
 import '../../core/constants/app_colors.dart';
 import '../../config/api_config.dart';
 import '../../core/constants/app_strings.dart';
@@ -21,7 +22,6 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  String _selectedLanguage = 'English';
   Map<String, String>? _user;
 
   @override
@@ -52,33 +52,57 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  String _getLanguageName(String code) {
+    switch (code) {
+      case 'ta': return 'Tamil';
+      case 'hi': return 'Hindi';
+      case 'te': return 'Telugu';
+      case 'ml': return 'Malayalam';
+      case 'kn': return 'Kannada';
+      case 'ja': return 'Japanese';
+      case 'ko': return 'Korean';
+      case 'zh': return 'Chinese';
+      case 'es': return 'Spanish';
+      case 'fr': return 'French';
+      case 'de': return 'German';
+      case 'ar': return 'Arabic';
+      case 'en': 
+      default: return 'English';
+    }
+  }
+
   void _showLanguageDialog() {
+    final Map<String, String> languages = {
+      'English': 'en',
+      'Tamil': 'ta',
+      'Hindi': 'hi',
+      'Telugu': 'te',
+      'Malayalam': 'ml',
+      'Kannada': 'kn',
+      'Japanese': 'ja',
+      'Korean': 'ko',
+      'Chinese': 'zh',
+      'Spanish': 'es',
+      'French': 'fr',
+      'German': 'de',
+      'Arabic': 'ar',
+    };
+
     showDialog(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('Select Analysis Language'),
-        children: [
-          'English',
-          'Tamil',
-          'Hindi',
-          'Telugu',
-          'Malayalam',
-          'Kannada',
-          'Bengali',
-          'Spanish',
-          'French',
-          'Arabic',
-        ].map((lang) {
+        title: const Text('Select Language'),
+        children: languages.entries.map((entry) {
           return SimpleDialogOption(
             onPressed: () {
-              setState(() {
-                _selectedLanguage = lang;
-              });
+              final newLocale = Locale(entry.value);
+              import_main.TruthLensApp.of(context)?.setLocale(newLocale);
+              setState(() {});
               Navigator.pop(ctx);
             },
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 6.0),
-              child: Text(lang, style: const TextStyle(fontSize: 15)),
+              child: Text(entry.key, style: const TextStyle(fontSize: 15)),
             ),
           );
         }).toList(),
@@ -212,7 +236,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ListTile(
                   leading: const Icon(Icons.translate_outlined),
                   title: const Text('Analysis Language'),
-                  subtitle: Text(_selectedLanguage),
+                  subtitle: Text(_getLanguageName(Localizations.localeOf(context).languageCode)),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: _showLanguageDialog,
                 ),

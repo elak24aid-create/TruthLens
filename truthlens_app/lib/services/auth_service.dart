@@ -39,6 +39,23 @@ class AuthService {
     await StorageService.logout();
   }
 
+  static Future<bool> fetchUser(String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/me'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        await StorageService.saveUser({'email': data['email'], 'name': data['name'] ?? data['email'].split('@')[0]});
+        return true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<bool> login(String email, String password) async {
     try {
       final response = await http.post(

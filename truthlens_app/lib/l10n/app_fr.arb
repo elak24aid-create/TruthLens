@@ -1,4 +1,5 @@
-﻿{
+{
+  "@@locale": "fr",
   "appTitle": "TruthLens",
   "news": "News",
   "analyze": "Analyze",

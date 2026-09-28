@@ -29,6 +29,10 @@ class _SplashScreenState extends State<SplashScreen> {
     if (!mounted) return;
     
     if (token != null) {
+      // Fetch user to ensure profile has correct info
+      await AuthService.fetchUser(token);
+      if (!mounted) return;
+      
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => MainNavigationScaffold(

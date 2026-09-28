@@ -52,7 +52,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      if (_lastFetchTime == null || DateTime.now().difference(_lastFetchTime!).inMinutes >= 15) {
+      if (_lastFetchTime == null || DateTime.now().difference(_lastFetchTime!).inMinutes >= 5) {
         _fetchNews(forceRefresh: true);
       }
     }
@@ -60,7 +60,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _startRefreshTimer() {
     _refreshTimer?.cancel();
-    _refreshTimer = Timer.periodic(const Duration(minutes: 15), (timer) {
+    _refreshTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
       _fetchNews(forceRefresh: true);
     });
   }
@@ -414,10 +414,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               )
             else if (_newsResponse == null || _newsResponse!.articles.isEmpty)
-              const Center(
+              Center(
                 child: Padding(
-                  padding: EdgeInsets.all(24.0),
-                  child: Text('No current news is available.'),
+                  padding: const EdgeInsets.all(24.0),
+                  child: Text(
+                    _lastFetchTime != null 
+                        ? 'Last checked: ${_lastFetchTime!.toLocal().toString().split('.')[0]}'
+                        : 'No current news is available.',
+                  ),
                 ),
               )
             else

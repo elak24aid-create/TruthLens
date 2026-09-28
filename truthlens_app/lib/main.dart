@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'l10n/generated/app_localizations.dart';
 import 'config/theme_config.dart';
 import 'core/constants/app_strings.dart';
 import 'features/auth/splash_screen.dart';
@@ -61,7 +61,7 @@ class _TruthLensAppState extends State<TruthLensApp> {
       darkTheme: ThemeConfig.darkTheme,
       themeMode: _themeMode,
       locale: _locale,
-      localizationsDelegates: const [
+      localizationsDelegates: [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
