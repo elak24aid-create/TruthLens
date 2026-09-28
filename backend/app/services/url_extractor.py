@@ -43,17 +43,6 @@ def fetch_and_extract_article(url: str) -> dict:
     if not is_safe_url(url):
         raise ValueError("Invalid or disallowed URL.")
 
-    if 'wikipedia.org/wiki/' in url:
-        topic = url.split('/wiki/')[-1].replace('_', ' ')
-        return {
-            'title': f'{topic} - Wikipedia',
-            'description': '',
-            'source_name': 'en.wikipedia.org',
-            'article_text': topic,
-            'published_at': '',
-            'claim_text': topic
-        }
-
     # Safe fetching with timeout and limits
     req = urllib.request.Request(
         url, 
@@ -126,16 +115,28 @@ def fetch_and_extract_article(url: str) -> dict:
     if not article_text.strip():
         raise ValueError("Could not extract any text from the article.")
 
-        # Formulate claim text for searching
-    clean_title = re.split(r'[-|]', title)[0].strip()
-    claim_text = clean_title
-    if len(claim_text) < 40 and description:
-        claim_text += ' ' + description
-        
-    claim_text = claim_text[:80].strip()
-    if not claim_text:
-        claim_text = title[:80]
-
+    import spacy
+    try:
+        nlp = spacy.load("en_core_web_sm")
+        doc = nlp(article_text[:2000])
+        claim_text = ""
+        for sent in doc.sents:
+            cleaned = re.sub(r'\[\d+\]', '', sent.text.strip())
+            words = cleaned.split()
+            if 5 < len(words) < 25:
+                has_subj = any("subj" in token.dep_ for token in sent)
+                has_verb = any(token.pos_ in ["VERB", "AUX"] for token in sent)
+                if has_subj and has_verb:
+                    claim_text = cleaned
+                    break
+                    
+        if not claim_text:
+            clean_title = re.split(r'[-|]', title)[0].strip()
+            claim_text = clean_title[:80]
+            
+    except Exception:
+        clean_title = re.split(r'[-|]', title)[0].strip()
+        claim_text = clean_title[:80]
 
     return {
         "title": title,

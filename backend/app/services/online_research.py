@@ -1,40 +1,34 @@
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import spacy
-from typing import List, Optional
-from ddgs import DDGS
-from app.schemas.common import EvidenceItem
-from datetime import datetime
-import re
-from functools import lru_cache
 import logging
-import requests
+import re
+import asyncio
+from typing import List, Optional, Dict, Any
+from datetime import datetime
+from functools import lru_cache
+from bs4 import BeautifulSoup
+from duckduckgo_search import DDGS
+import urllib.parse
+import concurrent.futures
+from app.schemas.evidence import EvidenceItem
+import spacy
+from requests_html import HTMLSession
 
 logger = logging.getLogger(__name__)
 
 try:
     nlp = spacy.load("en_core_web_sm")
-except Exception as e:
-    logger.error(f"Failed to load spacy model: {e}")
+except OSError:
     nlp = None
 
-def get_wiki_summary(query: str) -> str:
-    headers = {'User-Agent': 'TruthLensBot/1.0 (contact@truthlens.com)'}
+def get_wiki_summary(subject: str) -> Optional[str]:
     try:
-        search_url = f"https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={query}&utf8=&format=json"
-        s_res = requests.get(search_url, headers=headers, timeout=5).json()
-        search = s_res.get('query', {}).get('search', [])
-        if not search:
-            return ""
-        title = search[0]['title']
-        url = f"https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=true&explaintext=true&format=json&titles={title}"
-        res = requests.get(url, headers=headers, timeout=5).json()
-        pages = res.get('query', {}).get('pages', {})
-        for page_id in pages:
-            if str(page_id) != "-1":
-                return pages[page_id].get('extract', '').lower()
+        from urllib.request import urlopen
+        import json
+        url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(subject)}"
+        with urlopen(url, timeout=3) as response:
+            data = json.loads(response.read().decode())
+            return data.get('extract')
     except Exception:
-        pass
-    return ""
+        return None
 
 def check_identity(text: str) -> Optional[EvidenceItem]:
     if not nlp:
@@ -68,30 +62,45 @@ def check_identity(text: str) -> Optional[EvidenceItem]:
         if not attr_core:
             attr_core = attr_tokens[-1].lemma_.lower()
             
-        summary = get_wiki_summary(subj)
-        if not summary:
+        attr_lemmas = [t.lemma_.lower() for t in attr_tokens if not t.is_stop and t.is_alpha]
+        if not attr_lemmas:
             return None
-            
-        # Use word boundaries for exact match
-        has_attr = bool(re.search(r'\b' + re.escape(attr_core) + r'\b', summary))
         
-        rel = "DIRECT_SUPPORT" if has_attr else "DIRECT_CONTRADICTION"
-        
-        # If the claim is flat Earth, specifically handle missing flat
-        if not has_attr and attr_core in ['flat', 'president', 'ceo', 'dead', 'alive', 'king', 'queen', 'founder', 'inventor']:
-            return EvidenceItem(
-                source_type="web_search",
-                publisher="wikipedia",
-                title=f"Wikipedia: {subj.title()}",
-                url=f"https://en.wikipedia.org/wiki/{subj.replace(' ', '_')}",
-                domain="wikipedia.org",
-                relationship=rel,
-                published_date=None,
-                retrieved_at=datetime.now().isoformat(),
-                citation_type="Article",
-                evidence_excerpt=summary[:400] + "..."
-            )
-            
+        # We try both the exact subject and a clean version
+        candidates = [subj, " ".join([t.text for t in subj_tokens if t.pos_ in ["NOUN", "PROPN"]]).strip()]
+        for candidate in set(candidates):
+            summary = get_wiki_summary(candidate)
+            if summary:
+                # Better matching logic for Wiki
+                summary_lower = summary.lower()
+                # If ANY of the attributes are explicitly matched in the summary, it's strong direct support
+                # Example: "The Sun is a star" -> attr_lemmas = ['star']. "star" in summary -> SUPPORT
+                rel = "UNRELATED"
+                for lemma in attr_lemmas:
+                    if lemma in summary_lower:
+                        rel = "DIRECT_SUPPORT"
+                        break
+                
+                if rel == "UNRELATED" and attr_core in summary_lower:
+                    rel = "DIRECT_SUPPORT"
+                
+                if rel == "UNRELATED":
+                    # If it's a completely different entity type, maybe it's conflicting
+                    # but we keep it contextual for now
+                    rel = "CONTEXTUAL"
+                
+                return EvidenceItem(
+                    source_type="web_search",
+                    publisher="wikipedia.org",
+                    title=f"Wikipedia: {candidate.title()}",
+                    url=f"https://en.wikipedia.org/wiki/{candidate.replace(' ', '_')}",
+                    domain="wikipedia.org",
+                    relationship=rel,
+                    published_date=None,
+                    retrieved_at=datetime.utcnow().isoformat() + "Z",
+                    citation_type="Article",
+                    evidence_excerpt=summary[:400] + "..."
+                )
     return None
 
 def extract_svo(text: str):
@@ -104,6 +113,17 @@ def extract_svo(text: str):
     entities = [ent.text.lower() for ent in doc.ents]
     return {"subjects": subjects, "objects": objects, "verbs": verbs, "entities": entities}
 
+def search_ddgs(query: str, max_results: int = 5) -> List[Dict]:
+    results = []
+    try:
+        with DDGS() as ddgs:
+            # use a short timeout wrapper if possible, duckduckgo_search has internal retries
+            for res in ddgs.text(query, max_results=max_results):
+                results.append(res)
+    except Exception as e:
+        logger.warning(f"DDGS Error for {query}: {e}")
+    return results
+
 @lru_cache(maxsize=100)
 def perform_online_research(claim: str) -> Optional[List[EvidenceItem]]:
     """
@@ -115,14 +135,11 @@ def perform_online_research(claim: str) -> Optional[List[EvidenceItem]]:
         return []
         
     # Generalized mathematical-expression check
-    # Looks for a simple equation like "X + Y = Z"
     math_match = re.search(r'^([0-9\s\+\-\*\/\(\)\.]+)\s*=\s*([0-9\.\-]+)$', query_text)
     if math_match:
         left_expr = math_match.group(1).strip()
         right_val = math_match.group(2).strip()
         try:
-            # Safely evaluate basic math
-            # Filter out any malicious builtins by restricting globals/locals
             allowed_chars = set("0123456789+-*/(). ")
             if all(c in allowed_chars for c in left_expr):
                 calculated = eval(left_expr, {"__builtins__": None}, {})
@@ -147,112 +164,125 @@ def perform_online_research(claim: str) -> Optional[List[EvidenceItem]]:
         except Exception:
             pass
         
-    wiki_ev = check_identity(query_text)
-    if wiki_ev:
-        evidence.append(wiki_ev)
-        
     svo = extract_svo(query_text)
     subs = set(svo["subjects"])
     objs = set(svo["objects"])
     verbs = set(svo["verbs"])
     
-    # 1. Search for exact claim and fact checks
-    search_queries = [query_text]
+    # 1. Parallelize Wiki and DDGS searches
+    search_queries = [
+        query_text,
+        f"{query_text} fact check"
+    ]
+    
+    ddgs_results = []
+    wiki_ev = None
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        wiki_future = executor.submit(check_identity, query_text)
+        ddgs_futures = [executor.submit(search_ddgs, q, 4) for q in search_queries]
+        
+        try:
+            wiki_ev = wiki_future.result(timeout=4)
+        except Exception:
+            pass
+            
+        for future in concurrent.futures.as_completed(ddgs_futures, timeout=6):
+            try:
+                res = future.result()
+                if res:
+                    ddgs_results.extend(res)
+            except Exception:
+                pass
+
+    if wiki_ev:
+        evidence.append(wiki_ev)
     
     seen_urls = set()
-    evidence_results = []
     
-    def fetch_ddgs(q):
-        try:
-            with DDGS() as ddgs:
-                return list(ddgs.text(q, max_results=5))
-        except:
-            return []
+    for res in ddgs_results:
+        url = res.get('href', '')
+        if url in seen_urls or 'wikipedia.org' in url.lower():
+            continue
+        seen_urls.add(url)
+        
+        title = res.get('title', '').lower()
+        body = res.get('body', '').lower()
+        text = title + " " + body
+        
+        # 2. Match Entities and Propositions
+        missing_subs = [s for s in subs if s not in text]
+        missing_objs = [o for o in objs if o not in text]
+        
+        if missing_subs and missing_objs and len(subs) > 0 and len(objs) > 0:
+            continue # IRRELEVANT
             
-    try:
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        results = []
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            futures = [executor.submit(fetch_ddgs, q) for q in search_queries]
-            for future in as_completed(futures, timeout=10):
-                try:
-                    results.extend(future.result())
-                except:
-                    pass
-                    
-        for res in results:
-            url = res.get('href', '')
-            if not url or url in seen_urls:
-                continue
-            seen_urls.add(url)
+        if "manager" in query_text.lower() and "manager" not in text:
+            continue
             
-            title = res.get('title', '').lower()
-            body = res.get('body', '').lower()
-            text = title + " " + body
+        relationship = "CONTEXTUAL"
+        
+        # 3. Explicit Contradiction
+        contradiction_patterns = [
+            r'\b(false|fake|debunked|hoax|misleading|unfounded|myth|untrue|conspiracy)\b',
+            r'\b(no evidence)\b',
+            r'\b(is not)\b',
+            r'\b(did not)\b',
+            r'\b(never)\b',
+            r'\b(not true)\b',
+            r'\b(wrong)\b'
+        ]
+        
+        # 4. Explicit Support
+        support_patterns = [
+            r'\b(true|accurate|confirm|confirmed|verified|proven|fact)\b',
+            r'\b(is true)\b',
+            r'\b(is indeed)\b'
+        ]
+        
+        is_contradicted = any(re.search(pat, text) for pat in contradiction_patterns)
+        is_supported = any(re.search(pat, text) for pat in support_patterns)
+        relation_negated = any(f"not {v}" in text or f"did not {v}" in text or f"never {v}" in text for v in verbs)
+        
+        clean_claim = re.sub(r'[^\w\s]', '', query_text.lower())
+        clean_text = re.sub(r'[^\w\s]', '', text)
+        exact_match = clean_claim in clean_text
+        
+        # Determine explicit SUPPORT vs CONTRADICTION
+        # Very short claims like "The Sun is a star." matched closely in text
+        all_words = set(clean_claim.split())
+        words_found = len([w for w in all_words if w in clean_text.split()])
+        mostly_matched = (words_found / len(all_words) >= 0.7) if all_words else False
+        
+        if (exact_match or mostly_matched) and not is_contradicted and not relation_negated:
+            relationship = "DIRECT_SUPPORT"
+        elif is_contradicted or relation_negated:
+            relationship = "DIRECT_CONTRADICTION"
+        elif is_supported and mostly_matched:
+            relationship = "DIRECT_SUPPORT"
+        elif all(v in text for v in verbs) and not is_contradicted:
+            if len(verbs) > 0 and (len(subs) > 0 or len(objs) > 0):
+                if not missing_subs and not missing_objs:
+                    relationship = "DIRECT_SUPPORT"
+        
+        source = url.split('/')[2] if url else 'Unknown'
+        if source.startswith('www.'):
+            source = source[4:]
+        
+        evidence.append(EvidenceItem(
+            source_type="web_search",
+            publisher=source,
+            title=res.get('title', ''),
+            url=url,
+            domain=source,
+            relationship=relationship,
+            published_date=None,
+            retrieved_at=datetime.utcnow().isoformat() + "Z",
+            citation_type="Article",
+            evidence_excerpt=res.get('body', '')[:300]
+        ))
+        
+        if len(evidence) >= 8:
+            break
             
-            missing_subs = [s for s in subs if s not in text]
-            missing_objs = [o for o in objs if o not in text]
-            
-            if missing_subs and missing_objs and len(subs) > 0 and len(objs) > 0:
-                continue
-                
-            relationship = "CONTEXTUAL"
-            
-            high_quality = ['nasa.gov', 'wikipedia.org', 'britannica.com', 'edu', 'gov', 'reuters.com', 'apnews.com', 'bbc.com', 'snopes.com', 'politifact.com', 'factcheck.org', 'nature.com']
-            is_high_quality = any(hq in url.lower() for hq in high_quality)
-            
-            contradiction_patterns = [
-                r'\b(false|fake|debunked|hoax|misleading|unfounded|myth|untrue)\b',
-                r'\b(no evidence)\b',
-                r'\b(is not)\b',
-                r'\b(did not)\b',
-                r'\b(never)\b',
-                r'\b(conspiracy)\b',
-                r'\b(incorrect)\b',
-                r'\b(wrong)\b'
-            ]
-            
-            support_patterns = [
-                r'\b(true|accurate|confirm|confirmed|verified|proven|fact)\b',
-                r'\b(is true)\b'
-            ]
-            
-            is_contradicted = any(re.search(pat, text) for pat in contradiction_patterns)
-            is_supported = any(re.search(pat, text) for pat in support_patterns)
-            relation_negated = any(f"not {v}" in text or f"did not {v}" in text or f"never {v}" in text for v in verbs)
-            
-            clean_claim_words = set(re.findall(r'\w+', query_text.lower()))
-            clean_text_words = set(re.findall(r'\w+', text))
-            overlap = clean_claim_words.intersection(clean_text_words)
-            
-            if is_high_quality and not is_contradicted and (len(overlap) >= len(clean_claim_words)*0.4):
-                is_supported = True
-                
-            if is_contradicted or relation_negated:
-                relationship = "DIRECT_CONTRADICTION"
-            elif is_supported:
-                relationship = "DIRECT_SUPPORT"
-                
-            source = url.split('/')[2] if url else 'Unknown'
-            if source.startswith('www.'):
-                source = source[4:]
-                
-            evidence_results.append(EvidenceItem(
-                source_type="web_search",
-                publisher=source,
-                title=res.get('title', '')[:150],
-                url=url,
-                domain=source,
-                relationship=relationship,
-                published_date=datetime.utcnow().isoformat() + "Z",
-                retrieved_at=datetime.utcnow().isoformat() + "Z",
-                citation_type="Article",
-                evidence_excerpt=res.get('body', '')[:300]
-            ))
-            
-            if len(evidence_results) >= 5:
-                break
-        evidence.extend(evidence_results)
-    except Exception as e:
-        logger.error(f"Online research failed: {e}")
-    return evidence
+    return evidence if evidence else []

@@ -1,6 +1,24 @@
-from typing import Dict, Any, List
-from app.schemas.common import VerdictEnum, SignalItem, SignalStatusEnum, EvidenceItem, VerificationMode
-from app.schemas.checker import AnalysisResult, ExtractedMetadata
+import logging
+from typing import List, Dict, Any, Optional
+from app.models.schemas import (
+    VerdictEnum, SignalStatusEnum, VerificationMode,
+    SignalItem, AnalysisResult, ExtractedMetadata
+)
+from app.schemas.evidence import EvidenceItem
+
+logger = logging.getLogger(__name__)
+
+def get_source_weight(domain: str) -> float:
+    if not domain:
+        return 1.0
+    domain = domain.lower()
+    if domain.endswith(".edu") or domain.endswith(".gov") or domain in ["wikipedia.org", "nasa.gov", "science.nasa.gov", "britannica.com"]:
+        return 3.0
+    if domain in ["reuters.com", "apnews.com", "bbc.com", "bbc.co.uk", "snopes.com", "politifact.com", "factcheck.org"]:
+        return 2.5
+    if domain in ["facebook.com", "reddit.com", "quora.com", "twitter.com", "x.com", "tiktok.com", "instagram.com"]:
+        return 0.2
+    return 1.0
 
 def aggregate_evidence(
     text: str,
@@ -15,10 +33,6 @@ def aggregate_evidence(
     google_verdict: str = None,
     google_summary: str = None
 ) -> AnalysisResult:
-    """
-    Multi-signal aggregation engine.
-    Combines Fact Checks, Google Grounding, Web Research, ML inference, and credibility.
-    """
     signals: List[SignalItem] = []
     why_this_verdict: List[str] = []
     
@@ -26,21 +40,7 @@ def aggregate_evidence(
         evidence_items = []
         
     word_count = preprocessed.get("word_count", 0)
-    flags = preprocessed.get("flags", [])
     
-    # ML Signal
-    if ml_result.get("is_loaded") and ml_result.get("prediction"):
-        signals.append(
-            SignalItem(
-                category="ML Assessment",
-                status=SignalStatusEnum.FOUND,
-                label=f"Statistical Model: {ml_result['prediction']}",
-                score=ml_result["confidence"],
-                explanation=f"TF-IDF classification confidence: {ml_result['confidence']}%."
-            )
-        )
-    
-    # Evidence Signal
     if evidence_items:
         signals.append(
             SignalItem(
@@ -60,13 +60,21 @@ def aggregate_evidence(
             )
         )
 
-    # Tally evidence
-    supporting_count = sum(1 for e in evidence_items if e.relationship == "DIRECT_SUPPORT")
-    conflicting_count = sum(1 for e in evidence_items if e.relationship == "DIRECT_CONTRADICTION")
-    wiki_conflict = any(e.publisher == "wikipedia" and e.relationship == "DIRECT_CONTRADICTION" for e in evidence_items)
+    support_score = 0.0
+    conflict_score = 0.0
+    supporting_count = 0
+    conflicting_count = 0
+    
+    for e in evidence_items:
+        weight = get_source_weight(e.domain)
+        if e.relationship == "DIRECT_SUPPORT":
+            support_score += weight
+            supporting_count += 1
+        elif e.relationship == "DIRECT_CONTRADICTION":
+            conflict_score += weight
+            conflicting_count += 1
 
-    # Base signals logic for insufficient text (only if NO evidence at all was found)
-    if word_count < 5 and not wiki_conflict and conflicting_count == 0 and supporting_count == 0 and not (extracted_metadata and extracted_metadata.claims_found) and content_not_media(extracted_metadata):
+    if word_count < 5 and conflict_score == 0 and support_score == 0 and not (extracted_metadata and extracted_metadata.claims_found) and content_not_media(extracted_metadata):
         return AnalysisResult(
             verdict=VerdictEnum.INSUFFICIENT_EVIDENCE,
             confidence=0,
@@ -80,80 +88,28 @@ def aggregate_evidence(
             search_time_ms=search_time_ms
         )
 
-    # Priority: Google/Gemini Structured output overrides if it used grounding successfully
-    if verification_mode == VerificationMode.GOOGLE_GROUNDED and google_verdict:
-        # Convert Gemini Verdict
-        verdict = VerdictEnum.UNVERIFIED
-        if "MISLEADING" in google_verdict:
-            verdict = VerdictEnum.LIKELY_MISLEADING
-        elif "FALSE" in google_verdict:
-            verdict = VerdictEnum.LIKELY_FALSE
-        elif "TRUE" in google_verdict or "GENUINE" in google_verdict:
-            verdict = VerdictEnum.LIKELY_GENUINE
-        elif "INSUFFICIENT" in google_verdict:
-            verdict = VerdictEnum.INSUFFICIENT_EVIDENCE
-            
-        why_this_verdict.append("Google Search Grounding was utilized for this verdict.")
-        if supporting_count > 0:
-            why_this_verdict.append(f"Found {supporting_count} supporting grounded sources.")
-        if conflicting_count > 0:
-            why_this_verdict.append(f"Found {conflicting_count} conflicting grounded sources.")
-            
-        return AnalysisResult(
-            verdict=verdict,
-            confidence=None, # Confidence is optional, don't fabricate
-            verification_mode=verification_mode,
-            language=lang_info.get("language", "English"),
-            summary=google_summary or "Verified using Google Search Grounding.",
-            why_this_verdict=why_this_verdict,
-            signals=signals,
-            evidence=evidence_items,
-            extracted_metadata=extracted_metadata or ExtractedMetadata(),
-            search_time_ms=search_time_ms
-        )
-
-    # Fallback Logic (Fact Check / Web Research / ML)
-    if supporting_count == 0 and conflicting_count == 0:
-        if verification_mode == VerificationMode.OFFLINE:
-            summary = "Device is offline. Showing cached or local ML baseline."
-            verdict = VerdictEnum.UNVERIFIED
-            conf = ml_result.get("confidence") if ml_result.get("is_loaded") else 0
-        else:
-            verdict = VerdictEnum.INSUFFICIENT_EVIDENCE
-            conf = 0
-            summary = "No strong supporting or conflicting evidence could be found online."
-            why_this_verdict.append("The system found general context but no explicit verification.")
-            why_this_verdict.append("The TF-IDF ML model's prediction is discarded due to lack of verifiable external evidence.")
-            if ml_result.get("is_loaded"):
-                verification_mode = VerificationMode.LOCAL_ML_BASELINE
+    if support_score == 0 and conflict_score == 0:
+        verdict = VerdictEnum.INSUFFICIENT_EVIDENCE
+        conf = 0
+        summary = "No strong supporting or conflicting evidence could be found online."
+        why_this_verdict.append("The system found general context but no explicit verification.")
     
-    elif wiki_conflict:
+    elif conflict_score > 0 and conflict_score >= support_score:
         verdict = VerdictEnum.LIKELY_MISLEADING
-        conf = 99
+        conf = int(min(100, 75 + (conflict_score * 5)))
         summary = "Online evidence contradicts or refutes the core claims."
-        why_this_verdict.append("Authoritative encyclopedic source explicitly refutes the identity claim.")
-        
-    elif conflicting_count > 0 and conflicting_count >= supporting_count:
-        verdict = VerdictEnum.LIKELY_MISLEADING
-        conf = 85 + min(10, conflicting_count * 2)
-        summary = "Online evidence contradicts or refutes the core claims."
-        why_this_verdict.append(f"Found {conflicting_count} online fact-check(s) refuting this claim.")
-        if supporting_count > 0 and supporting_count == conflicting_count:
-            if wiki_conflict:
-                # Strong identity conflict overrides a tie
-                pass
-            else:
-                verdict = VerdictEnum.INSUFFICIENT_EVIDENCE
-                summary = "Online evidence is conflicting and inconclusive."
-                why_this_verdict.append("Found equal amounts of supporting and refuting claims.")
-                conf = 0
+        why_this_verdict.append(f"Found {conflicting_count} online source(s) refuting this claim (Weighted Score: {conflict_score:.1f}).")
+        if support_score > 0 and support_score == conflict_score:
+            verdict = VerdictEnum.INSUFFICIENT_EVIDENCE
+            summary = "Online evidence is conflicting and inconclusive."
+            why_this_verdict.append("Found equal weights of supporting and refuting claims.")
+            conf = 0
 
-    elif supporting_count > 0 and supporting_count > conflicting_count:
+    elif support_score > 0 and support_score > conflict_score:
         verdict = VerdictEnum.LIKELY_GENUINE
-        conf = 85 + min(10, supporting_count * 2)
+        conf = int(min(100, 75 + (support_score * 5)))
         summary = "Online evidence supports and verifies the core claims."
-        why_this_verdict.append(f"Found {supporting_count} online fact-check(s) supporting this claim.")
-
+        why_this_verdict.append(f"Found {supporting_count} online source(s) supporting this claim (Weighted Score: {support_score:.1f}).")
     else:
         verdict = VerdictEnum.UNVERIFIED
         conf = 55
