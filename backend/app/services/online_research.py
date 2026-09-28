@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 from duckduckgo_search import DDGS
 import urllib.parse
 import concurrent.futures
-from app.schemas.evidence import EvidenceItem
+from app.schemas.common import EvidenceItem
 import spacy
 from requests_html import HTMLSession
 
