@@ -1,0 +1,16 @@
+﻿{
+  "appTitle": "TruthLens",
+  "news": "News",
+  "analyze": "Analyze",
+  "history": "History",
+  "saved": "Saved",
+  "profile": "Profile",
+  "settings": "Settings",
+  "language": "Language",
+  "lastChecked": "Last checked",
+  "noNews": "No current news available",
+  "guestUser": "Guest User",
+  "loading": "Loading...",
+  "empty": "Empty",
+  "error": "Error occurred"
+}

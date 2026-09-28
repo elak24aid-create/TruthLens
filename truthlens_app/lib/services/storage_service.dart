@@ -113,4 +113,16 @@ class StorageService {
     final jsonList = reports.map((r) => jsonEncode(r.toJson())).toList();
     await prefs.setStringList(_reportsKey, jsonList);
   }
+
+  // --- LOCALE ---
+  static Future<String?> getLocale() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('truthlens_locale');
+  }
+
+  static Future<void> saveLocale(String localeCode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('truthlens_locale', localeCode);
+  }
 }
+

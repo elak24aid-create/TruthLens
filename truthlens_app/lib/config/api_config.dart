@@ -1,22 +1,7 @@
-import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
 
 class ApiConfig {
   static const String productionUrl = 'https://truthlens-l1vq.onrender.com/api';
-
-  /// Resolves the appropriate local backend host based on the active platform:
-  /// - Android emulator: 10.0.2.2 (special alias to host loopback interface)
-  /// - Windows / Desktop / Web / iOS Simulator: 127.0.0.1
-  static String get defaultHost {
-    if (kIsWeb) return '127.0.0.1';
-    try {
-      if (Platform.isAndroid) return '10.0.2.2';
-    } catch (_) {
-      // Fallback if platform detection fails
-      return '127.0.0.1';
-    }
-    return '127.0.0.1';
-  }
 
   static String get baseUrl {
     const envUrl = String.fromEnvironment('API_BASE_URL');
