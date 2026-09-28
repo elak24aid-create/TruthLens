@@ -10,7 +10,6 @@ import urllib.parse
 import concurrent.futures
 from app.schemas.common import EvidenceItem
 import spacy
-from requests_html import HTMLSession
 
 logger = logging.getLogger(__name__)
 
