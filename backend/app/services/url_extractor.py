@@ -43,6 +43,17 @@ def fetch_and_extract_article(url: str) -> dict:
     if not is_safe_url(url):
         raise ValueError("Invalid or disallowed URL.")
 
+    if 'wikipedia.org/wiki/' in url:
+        topic = url.split('/wiki/')[-1].replace('_', ' ')
+        return {
+            'title': f'{topic} - Wikipedia',
+            'description': '',
+            'source_name': 'en.wikipedia.org',
+            'article_text': topic,
+            'published_at': '',
+            'claim_text': topic
+        }
+
     # Safe fetching with timeout and limits
     req = urllib.request.Request(
         url, 
