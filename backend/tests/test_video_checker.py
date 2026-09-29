@@ -81,4 +81,4 @@ def test_check_video_no_text(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert response.json()["verdict"] in ["Insufficient Evidence", "Likely False", "Likely Genuine"]
+    assert response.json()["verdict"] in ["INSUFFICIENT_EVIDENCE", "LIKELY_MISLEADING", "UNVERIFIED", "Unverified", "Insufficient Evidence"]

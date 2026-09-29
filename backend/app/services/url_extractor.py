@@ -62,6 +62,8 @@ def fetch_and_extract_article(url: str) -> dict:
                 
             # Limit read size (e.g., 2MB)
             html = response.read(2 * 1024 * 1024)
+    except ValueError as e:
+        raise e
     except Exception as e:
         is_fallback = True
 

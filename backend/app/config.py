@@ -22,7 +22,7 @@ class Settings:
     SECRET_KEY: str = os.getenv("SECRET_KEY", "dev_secret_key_truthlens")
 
     # Rate Limiting
-    RATE_LIMIT_PER_MINUTE: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
+    RATE_LIMIT_PER_MINUTE: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "500"))
 
     # ML Model Paths
     ML_MODEL_PATH: Path = BASE_DIR / os.getenv(

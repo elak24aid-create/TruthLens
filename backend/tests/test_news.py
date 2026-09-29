@@ -28,12 +28,13 @@ class MockFeed:
 
 @pytest.fixture(autouse=True)
 def clear_cache():
-    # Clear the global cache before each test
-    news_router_module._NEWS_CACHE["data"] = None
-    news_router_module._NEWS_CACHE["timestamp"] = 0
+    news_router_module._NEWS_CACHE.clear()
 
+@patch("app.routers.news.fetch_ddgs")
 @patch("feedparser.parse")
-def test_get_news_valid(mock_parse):
+@patch("urllib.request.urlopen")
+def test_get_news_valid(mock_urlopen, mock_parse, mock_ddgs):
+    mock_ddgs.return_value = []
     mock_parse.return_value = MockFeed([
         MockFeedEntry("Test Headline", "http://test.com/1", "Test summary")
     ])
@@ -45,16 +46,22 @@ def test_get_news_valid(mock_parse):
     assert data["articles"][0]["title"] == "Test Headline"
     assert data["articles"][0]["url"] == "http://test.com/1"
     
+@patch("app.routers.news.fetch_ddgs")
 @patch("feedparser.parse")
-def test_get_news_empty(mock_parse):
+@patch("urllib.request.urlopen")
+def test_get_news_empty(mock_urlopen, mock_parse, mock_ddgs):
+    mock_ddgs.return_value = []
     mock_parse.return_value = MockFeed([])
     response = client.get("/api/news")
     assert response.status_code == 200
     data = response.json()
     assert len(data["articles"]) == 0
 
+@patch("app.routers.news.fetch_ddgs")
 @patch("feedparser.parse")
-def test_get_news_malformed(mock_parse):
+@patch("urllib.request.urlopen")
+def test_get_news_malformed(mock_urlopen, mock_parse, mock_ddgs):
+    mock_ddgs.return_value = []
     # Entry missing title/link
     mock_parse.return_value = MockFeed([
         MockFeedEntry("", "http://test.com/2", "Summary")
@@ -65,37 +72,39 @@ def test_get_news_malformed(mock_parse):
     # Should skip malformed
     assert len(data["articles"]) == 0
 
+@patch("app.routers.news.fetch_ddgs")
 @patch("feedparser.parse")
-def test_get_news_duplicate(mock_parse):
+@patch("urllib.request.urlopen")
+def test_get_news_duplicate(mock_urlopen, mock_parse, mock_ddgs):
+    mock_ddgs.return_value = []
     mock_parse.return_value = MockFeed([
         MockFeedEntry("Same Title", "http://test.com/dup", "Summary 1"),
-        MockFeedEntry("Same Title", "http://test.com/dup", "Summary 2"), # duplicate URL and title
+        MockFeedEntry("Same Title", "http://test.com/dup", "Summary 2"),
     ])
     response = client.get("/api/news")
     assert response.status_code == 200
     data = response.json()
-    # Should only return one article because of deduplication
     assert len(data["articles"]) == 1
 
+@patch("app.routers.news.fetch_ddgs")
 @patch("feedparser.parse")
-def test_get_news_source_failure(mock_parse):
+@patch("urllib.request.urlopen")
+def test_get_news_source_failure(mock_urlopen, mock_parse, mock_ddgs):
+    mock_ddgs.return_value = []
     mock_parse.side_effect = Exception("Connection error")
-    # Because we loop over sources and catch exceptions per source, 
-    # if all fail, it should just return an empty list (if cache is empty)
+    mock_urlopen.side_effect = Exception("Connection error")
     response = client.get("/api/news")
     assert response.status_code == 200
     data = response.json()
     assert len(data["articles"]) == 0
 
+@patch("app.routers.news.fetch_ddgs")
 @patch("feedparser.parse")
-def test_get_news_pagination_limit(mock_parse):
-    # Generate 15 entries
+@patch("urllib.request.urlopen")
+def test_get_news_pagination_limit(mock_urlopen, mock_parse, mock_ddgs):
+    mock_ddgs.return_value = []
     entries = [MockFeedEntry(f"Title {i}", f"http://test.com/{i}", "Sum") for i in range(15)]
     mock_parse.return_value = MockFeed(entries)
-    
-    # But since we limit to 10 PER SOURCE in the router, if there's only 1 source returning these,
-    # it will actually be capped at 10. Wait, the mock is called multiple times.
-    # We will get up to 10 * num_sources. Let's just limit to 2 via query.
     response = client.get("/api/news?limit=2")
     assert response.status_code == 200
     data = response.json()

@@ -19,15 +19,36 @@ logger = logging.getLogger(__name__)
 _NEWS_CACHE = {}
 CACHE_TTL_SECONDS = 240  # 4 minutes
 
-def fetch_rss(query: str, limit: int) -> List[NewsArticle]:
+def fetch_rss(query: str, category: str, limit: int) -> List[NewsArticle]:
     articles = []
     try:
-        # Google News RSS
-        url = f"https://news.google.com/rss/search?q={quote(query)}"
+        url = ""
+        if query and query.strip():
+            url = f"https://news.google.com/rss/search?q={quote(query.strip())}&hl=en-US&gl=US&ceid=US:en"
+        elif category and category.lower() != "all":
+            # Map category to Google News topic
+            cat_map = {
+                "world": "WORLD",
+                "technology": "TECHNOLOGY",
+                "science": "SCIENCE",
+                "sports": "SPORTS",
+                "business": "BUSINESS",
+                "health": "HEALTH",
+                "india": "NATION" # Assuming Nation for India if localized, but we use US/en. Let's just search it.
+            }
+            if category.lower() == "india":
+                url = "https://news.google.com/rss/search?q=India&hl=en-IN&gl=IN&ceid=IN:en"
+            else:
+                topic = cat_map.get(category.lower(), "WORLD")
+                url = f"https://news.google.com/rss/headlines/section/topic/{topic}?hl=en-US&gl=US&ceid=US:en"
+        else:
+            url = "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en"
+
         import urllib.request
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         xml = urllib.request.urlopen(req, timeout=10).read()
         feed = feedparser.parse(xml)
+        
         for entry in feed.entries[:limit]:
             try:
                 dt = parsedate_to_datetime(entry.published)
@@ -35,24 +56,25 @@ def fetch_rss(query: str, limit: int) -> List[NewsArticle]:
             except:
                 dt_iso = datetime.utcnow().isoformat() + "Z"
                 
-            source = entry.source.title if 'source' in entry else "Google News"
+            source = entry.source.title if hasattr(entry, 'source') else "Google News"
             title = entry.title
+            if not title or not entry.link:
+                continue
             if " - " in title:
                 title = title.rsplit(" - ", 1)[0]
                 
-            # Try to grab an image if available in description or media
             image_url = None
-            if 'media_content' in entry and len(entry.media_content) > 0:
+            if hasattr(entry, 'media_content') and len(entry.media_content) > 0:
                 image_url = entry.media_content[0].get('url')
             
             articles.append(NewsArticle(
                 title=title,
-                description=title, # RSS description is often just a link to the article
+                description=title, 
                 url=entry.link,
                 source_name=source,
                 published_at=dt_iso,
                 image_url=image_url,
-                category=query
+                category=category or "All"
             ))
     except Exception as e:
         logger.warning(f"RSS fetch failed: {e}")
@@ -150,7 +172,7 @@ async def get_news(
 
     try:
         # Try RSS First
-        articles = fetch_rss(search_term, limit=limit*2)
+        articles = fetch_rss(query, category, limit=limit*2)
         
         # Fallback to DDGS if RSS returned nothing
         if not articles:

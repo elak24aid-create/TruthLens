@@ -68,4 +68,4 @@ def test_check_image_no_text(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert response.json()["verdict"] in ["Insufficient Evidence", "Likely False"]
+    assert response.json()["verdict"] in ["INSUFFICIENT_EVIDENCE", "LIKELY_MISLEADING", "UNVERIFIED", "Unverified"]
