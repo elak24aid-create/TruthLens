@@ -187,9 +187,11 @@ def perform_online_research(claim: str) -> Optional[List[EvidenceItem]]:
     verbs = set(svo["verbs"])
     
     # 1. Parallelize Wiki and DDGS searches
+    short_ddgs_query = " ".join(query_text.split()[:12]) if len(query_text.split()) > 12 else query_text
     search_queries = [
         query_text,
-        f"{query_text} fact check"
+        short_ddgs_query,
+        f"{short_ddgs_query} fact check"
     ]
     
     ddgs_results = []
@@ -215,14 +217,14 @@ def perform_online_research(claim: str) -> Optional[List[EvidenceItem]]:
         except Exception as e:
             errors.append(e)
             
-    if not ddgs_results and not wiki_ev and errors:
+    if not ddgs_results and not wiki_ev:
         # Fallback to Wikipedia Fulltext
         short_query = " ".join(query_text.split()[:10]) if len(query_text.split()) > 10 else query_text
         wiki_results = search_wikipedia_fulltext(short_query, 3)
         if wiki_results:
             ddgs_results.extend(wiki_results)
             errors = []
-        else:
+        elif errors:
             raise Exception("Search engine failure or timeout.")
 
     if wiki_ev:
