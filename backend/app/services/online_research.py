@@ -36,7 +36,7 @@ def search_wiki(query: str, limit: int = 3) -> List[Dict]:
         # Extract keywords for wiki search to avoid exact sentence misses
         doc = nlp(query) if nlp else None
         if doc:
-            keywords = " ".join([t.text for t in doc if t.pos_ in ["NOUN", "PROPN", "ADJ"]][:4])
+            keywords = " ".join([t.text for t in doc if t.pos_ in ["NOUN", "PROPN", "ADJ", "VERB"]][:5])
         else:
             keywords = query
         if not keywords: keywords = query
@@ -143,7 +143,13 @@ def nlp_fallback_verification(claim: str, evidence_texts: List[str]) -> str:
             if has_refut or has_sent_neg or num_contradiction or ant_contradiction:
                 refuted = True
             else:
-                supported = True
+                if len(strict_ents) >= 2:
+                    if sum(1 for e in strict_ents if clean_str(e) in clean_str(sent)) >= 2:
+                        supported = True
+                    else:
+                        refuted = True
+                else:
+                    supported = True
 
     if global_refut and (refuted or not supported):
          return "Likely Misleading" if not is_neg else "Likely Genuine"
