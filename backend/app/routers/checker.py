@@ -175,18 +175,25 @@ def check_url(request: CheckUrlRequest):
             claims_found=[extracted.get("title", "")] if extracted.get("title") else []
         )
         
-        return perform_verification_pipeline(
-            raw_text=extracted["claim_text"],
-            content_type="news article",
-            extracted_metadata=metadata
-        )
+        try:
+            result = perform_verification_pipeline(
+                raw_text=extracted["claim_text"],
+                content_type="news article",
+                extracted_metadata=metadata
+            )
+        except HTTPException as he:
+            if extracted.get("is_fallback"):
+                raise HTTPException(status_code=500, detail="This article could not be accessed for verification.")
+            raise
+            
+        return result
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except HTTPException:
         raise
     except Exception as e:
         logger.exception("URL check error")
-        raise HTTPException(status_code=500, detail="ARTICLE EXTRACTION FAILURE: Could not extract content from the URL.")
+        raise HTTPException(status_code=500, detail="This article could not be accessed for verification.")
 
 @router.post("/check-image", response_model=AnalysisResult)
 async def check_image(file: UploadFile = File(...)):

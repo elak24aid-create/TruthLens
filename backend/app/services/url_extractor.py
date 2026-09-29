@@ -60,7 +60,27 @@ def fetch_and_extract_article(url: str) -> dict:
             # Limit read size (e.g., 2MB)
             html = response.read(2 * 1024 * 1024)
     except Exception as e:
-        raise ValueError(f"Failed to fetch URL: {str(e)}")
+        # Fallback: extract metadata from URL path
+        parsed = urllib.parse.urlparse(url)
+        path = parsed.path
+        parts = [p for p in path.split('/') if p and not p.isdigit() and len(p) > 5]
+        if parts:
+            last_part = parts[-1]
+            last_part = re.sub(r'\.[a-zA-Z0-9]+$', '', last_part) # Remove extension
+            fallback_claim = last_part.replace('-', ' ').replace('_', ' ').strip()
+            
+            if len(fallback_claim) > 15:
+                return {
+                    "title": fallback_claim.title(),
+                    "description": "",
+                    "source_name": parsed.hostname,
+                    "published_at": "",
+                    "article_text": "",
+                    "claim_text": fallback_claim,
+                    "is_fallback": True,
+                    "fetch_error": str(e)
+                }
+        raise ValueError("This article could not be accessed for verification.")
 
     soup = BeautifulSoup(html, 'html.parser')
     
