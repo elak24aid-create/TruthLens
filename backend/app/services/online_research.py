@@ -20,10 +20,11 @@ except OSError:
 
 def get_wiki_summary(subject: str) -> Optional[str]:
     try:
-        from urllib.request import urlopen
+        from urllib.request import Request, urlopen
         import json
         url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(subject)}"
-        with urlopen(url, timeout=3) as response:
+        req = Request(url, headers={'User-Agent': 'TruthLens/1.0'})
+        with urlopen(req, timeout=5) as response:
             data = json.loads(response.read().decode())
             return data.get('extract')
     except Exception:
@@ -84,9 +85,8 @@ def check_identity(text: str) -> Optional[EvidenceItem]:
                     rel = "DIRECT_SUPPORT"
                 
                 if rel == "UNRELATED":
-                    # If it's a completely different entity type, maybe it's conflicting
-                    # but we keep it contextual for now
-                    rel = "CONTEXTUAL"
+                    # If it's the exact same entity but the attribute is missing, it's a contradiction of identity
+                    rel = "DIRECT_CONTRADICTION"
                 
                 return EvidenceItem(
                     source_type="web_search",
@@ -114,13 +114,10 @@ def extract_svo(text: str):
 
 def search_ddgs(query: str, max_results: int = 5) -> List[Dict]:
     results = []
-    try:
-        with DDGS() as ddgs:
-            # use a short timeout wrapper if possible, duckduckgo_search has internal retries
-            for res in ddgs.text(query, max_results=max_results):
-                results.append(res)
-    except Exception as e:
-        logger.warning(f"DDGS Error for {query}: {e}")
+    with DDGS() as ddgs:
+        # use a short timeout wrapper if possible, duckduckgo_search has internal retries
+        for res in ddgs.text(query, max_results=max_results):
+            results.append(res)
     return results
 
 @lru_cache(maxsize=100)
@@ -177,22 +174,28 @@ def perform_online_research(claim: str) -> Optional[List[EvidenceItem]]:
     ddgs_results = []
     wiki_ev = None
     
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         wiki_future = executor.submit(check_identity, query_text)
-        ddgs_futures = [executor.submit(search_ddgs, q, 4) for q in search_queries]
         
         try:
             wiki_ev = wiki_future.result(timeout=4)
         except Exception:
             pass
             
-        for future in concurrent.futures.as_completed(ddgs_futures, timeout=6):
-            try:
-                res = future.result()
-                if res:
-                    ddgs_results.extend(res)
-            except Exception:
-                pass
+    # Sequential DDGS to avoid RateLimitError
+    errors = []
+    for q in search_queries:
+        try:
+            res = search_ddgs(q, 4)
+            if res:
+                ddgs_results.extend(res)
+                break # stop at first successful query
+            time.sleep(0.5) # gentle delay
+        except Exception as e:
+            errors.append(e)
+            
+    if not ddgs_results and not wiki_ev and errors:
+        raise Exception("Search engine failure or timeout.")
 
     if wiki_ev:
         evidence.append(wiki_ev)
@@ -253,16 +256,12 @@ def perform_online_research(claim: str) -> Optional[List[EvidenceItem]]:
         words_found = len([w for w in all_words if w in clean_text.split()])
         mostly_matched = (words_found / len(all_words) >= 0.7) if all_words else False
         
-        if (exact_match or mostly_matched) and not is_contradicted and not relation_negated:
+        if exact_match and not is_contradicted and not relation_negated:
             relationship = "DIRECT_SUPPORT"
         elif is_contradicted or relation_negated:
             relationship = "DIRECT_CONTRADICTION"
         elif is_supported and mostly_matched:
             relationship = "DIRECT_SUPPORT"
-        elif all(v in text for v in verbs) and not is_contradicted:
-            if len(verbs) > 0 and (len(subs) > 0 or len(objs) > 0):
-                if not missing_subs and not missing_objs:
-                    relationship = "DIRECT_SUPPORT"
         
         source = url.split('/')[2] if url else 'Unknown'
         if source.startswith('www.'):

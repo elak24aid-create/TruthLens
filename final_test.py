@@ -9,10 +9,10 @@ print("Status:", r.status_code)
 print()
 
 claims = [
-    "The Sun is a star.",
-    "The Earth is flat.",
-    "Michael Jackson is the president of the United States.",
-    "2 + 2 = 5."
+    "The Sun is a star.  ",
+    "The Earth is flat.  ",
+    "Michael Jackson is the president of the United States.  ",
+    "2 + 2 = 5.  "
 ]
 
 for c in claims:

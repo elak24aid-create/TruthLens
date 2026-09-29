@@ -11,8 +11,9 @@ import '../../models/news_article.dart';
 class HomeScreen extends StatefulWidget {
   final VoidCallback onCheckNewsPressed;
   final Function(String) onCheckText;
+  final Function(String)? onCheckUrl;
 
-  const HomeScreen({super.key, required this.onCheckNewsPressed, required this.onCheckText});
+  const HomeScreen({super.key, required this.onCheckNewsPressed, required this.onCheckText, this.onCheckUrl});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -500,9 +501,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 const SizedBox(width: 8),
                 TextButton.icon(
                   onPressed: () {
-                    // Send headline + description as text to be checked
-                    final textToCheck = '${article.title}\n\n${article.description}';
-                    widget.onCheckText(textToCheck);
+                    if (article.url.isNotEmpty && widget.onCheckUrl != null) {
+                      widget.onCheckUrl!(article.url);
+                    } else {
+                      final textToCheck = '${article.title}\n\n${article.description}'.trim();
+                      if (textToCheck.isNotEmpty) {
+                        widget.onCheckText(textToCheck);
+                      }
+                    }
                   },
                   icon: const Icon(Icons.check, size: 14),
                   label: const Text('Check This News', style: TextStyle(fontSize: 12)),
@@ -521,11 +527,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   String _formatDate(String isoString) {
     try {
-      final dt = DateTime.parse(isoString).toLocal();
+      String parseString = isoString;
+      if (!parseString.endsWith('Z') && !parseString.contains('+')) {
+        parseString += 'Z';
+      }
+      final dt = DateTime.parse(parseString).toLocal();
       final now = DateTime.now();
       final diff = now.difference(dt);
       if (diff.inMinutes < 60) {
-        return '${diff.inMinutes}m ago';
+        return '${diff.inMinutes < 0 ? 0 : diff.inMinutes}m ago';
       } else if (diff.inHours < 24) {
         return '${diff.inHours}h ago';
       } else {

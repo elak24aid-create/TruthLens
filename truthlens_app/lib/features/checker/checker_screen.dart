@@ -9,7 +9,8 @@ import 'result_screen.dart';
 
 class CheckerScreen extends StatefulWidget {
   final String? initialText;
-  const CheckerScreen({super.key, this.initialText});
+  final String? initialUrl;
+  const CheckerScreen({super.key, this.initialText, this.initialUrl});
 
   @override
   State<CheckerScreen> createState() => _CheckerScreenState();
@@ -43,6 +44,15 @@ class _CheckerScreenState extends State<CheckerScreen>
     });
     if (widget.initialText != null && widget.initialText!.isNotEmpty) {
       _textController.text = widget.initialText!;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _analyzeNewsText();
+      });
+    } else if (widget.initialUrl != null && widget.initialUrl!.isNotEmpty) {
+      _urlController.text = widget.initialUrl!;
+      _tabController.index = 1;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _analyzeUrl();
+      });
     }
   }
 
@@ -52,6 +62,12 @@ class _CheckerScreenState extends State<CheckerScreen>
     if (widget.initialText != oldWidget.initialText && widget.initialText != null && widget.initialText!.isNotEmpty) {
       _textController.text = widget.initialText!;
       _tabController.animateTo(0);
+      _analyzeNewsText();
+    }
+    if (widget.initialUrl != oldWidget.initialUrl && widget.initialUrl != null && widget.initialUrl!.isNotEmpty) {
+      _urlController.text = widget.initialUrl!;
+      _tabController.animateTo(1);
+      _analyzeUrl();
     }
   }
 

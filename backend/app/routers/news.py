@@ -5,7 +5,10 @@ from typing import List, Optional
 import time
 import requests
 from ddgs import DDGS
+import feedparser
 from urllib.parse import quote
+from email.utils import parsedate_to_datetime
+import re
 
 from app.schemas.news import NewsResponse, NewsArticle
 
@@ -16,49 +19,41 @@ logger = logging.getLogger(__name__)
 _NEWS_CACHE = {}
 CACHE_TTL_SECONDS = 240  # 4 minutes
 
-def parse_gdelt_date(date_str: str) -> str:
-    try:
-        # GDELT format: 20260928T031500Z
-        if len(date_str) == 16 and 'T' in date_str and date_str.endswith('Z'):
-            dt = datetime.strptime(date_str, "%Y%m%dT%H%M%SZ")
-            return dt.isoformat() + "Z"
-    except Exception:
-        pass
-    return datetime.utcnow().isoformat() + "Z"
-
-def fetch_gdelt(query: str, limit: int) -> List[NewsArticle]:
+def fetch_rss(query: str, limit: int) -> List[NewsArticle]:
     articles = []
     try:
-        # GDELT URL format
-        encoded_query = quote(query)
-        url = f"https://api.gdeltproject.org/api/v2/doc/doc?query={encoded_query}&mode=artlist&maxrecords={limit}&format=json"
-        res = requests.get(url, timeout=4) # fast timeout
-        if res.status_code == 200:
-            data = res.json()
-            if "articles" in data:
-                for item in data["articles"]:
-                    title = item.get("title", "").strip()
-                    url = item.get("url", "")
-                    if not title or not url:
-                        continue
-                        
-                    raw_date = item.get("seendate", "")
-                    published_at = parse_gdelt_date(raw_date) if raw_date else datetime.utcnow().isoformat() + "Z"
-                    
-                    articles.append(NewsArticle(
-                        title=title,
-                        description=title, # GDELT artlist often doesn't give a good snippet
-                        url=url,
-                        source_name=item.get("domain", "GDELT Source"),
-                        published_at=published_at,
-                        image_url=item.get("socialimage", None),
-                        category=query
-                    ))
+        # Google News RSS
+        url = f"https://news.google.com/rss/search?q={quote(query)}"
+        feed = feedparser.parse(url)
+        for entry in feed.entries[:limit]:
+            try:
+                dt = parsedate_to_datetime(entry.published)
+                dt_iso = dt.isoformat() + "Z"
+            except:
+                dt_iso = datetime.utcnow().isoformat() + "Z"
+                
+            source = entry.source.title if 'source' in entry else "Google News"
+            title = entry.title
+            if " - " in title:
+                title = title.rsplit(" - ", 1)[0]
+                
+            # Try to grab an image if available in description or media
+            image_url = None
+            if 'media_content' in entry and len(entry.media_content) > 0:
+                image_url = entry.media_content[0].get('url')
+            
+            articles.append(NewsArticle(
+                title=title,
+                description=title, # RSS description is often just a link to the article
+                url=entry.link,
+                source_name=source,
+                published_at=dt_iso,
+                image_url=image_url,
+                category=query
+            ))
     except Exception as e:
-        logger.warning(f"GDELT fetch failed: {e}")
+        logger.warning(f"RSS fetch failed: {e}")
     return articles
-
-import re
 
 def parse_ddgs_date(date_str: str) -> str:
     if not date_str:
@@ -131,6 +126,7 @@ async def get_news(
     
     cache_key = f"{str(query).lower()}_{str(category).lower()}"
     
+    # If not forcing refresh, check cache
     if not force_refresh and cache_key in _NEWS_CACHE:
         cached_data = _NEWS_CACHE[cache_key]
         if current_time - cached_data["timestamp"] < CACHE_TTL_SECONDS:
@@ -150,20 +146,28 @@ async def get_news(
         search_term = "world news" # default generic fallback
 
     try:
-        # Try GDELT First
-        articles = fetch_gdelt(search_term, limit=limit*2)
+        # Try RSS First
+        articles = fetch_rss(search_term, limit=limit*2)
         
-        # Fallback to DDGS if GDELT returned nothing
+        # Fallback to DDGS if RSS returned nothing
         if not articles:
             articles = fetch_ddgs(search_term, limit=limit*2)
             
         articles = deduplicate_articles(articles)
         
-        # Sort by published_at descending
+        # Sort by actual published_at descending
         articles.sort(key=lambda x: x.published_at, reverse=True)
         
+        # If still empty but we have an old cache, return it instead of empty
+        if not articles and cache_key in _NEWS_CACHE:
+            cached_data = _NEWS_CACHE[cache_key]
+            return NewsResponse(
+                articles=cached_data["data"][:limit],
+                updated_at=datetime.fromtimestamp(cached_data["timestamp"]).isoformat() + "Z",
+                status="success (cached fallback)"
+            )
+            
         if not articles:
-            # Only return empty if both failed entirely
             return NewsResponse(
                 articles=[],
                 updated_at=datetime.fromtimestamp(current_time).isoformat() + "Z",

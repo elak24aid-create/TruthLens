@@ -46,20 +46,26 @@ class ApiService {
       ).timeout(ApiConfig.requestTimeout);
       if (response.statusCode == 200) return AnalysisResult.fromJson(jsonDecode(response.body));
       
+      if (response.statusCode >= 500) {
+        throw ApiException('Server Error: Internal server error occurred (Status ${response.statusCode})', response.statusCode);
+      }
+
       String errorMsg = 'Failed to analyze text (Status ${response.statusCode})';
       try {
         final decoded = jsonDecode(response.body);
         if (decoded['detail'] != null) errorMsg = decoded['detail'];
       } catch (_) {}
       throw ApiException(errorMsg, response.statusCode);
+    } on TimeoutException {
+      throw ApiException('Network Failure: The request timed out.');
     } on SocketException {
-      throw ApiException('Offline mode active. Connection required for analysis.');
+      throw ApiException('Network Failure: Offline mode active. Connection required for analysis.');
     } catch (e) {
       if (e is ApiException) rethrow;
       if (e.toString().contains('SocketException') || e.toString().contains('Connection refused')) {
-        throw ApiException('Offline mode active. Connection required for analysis.');
+        throw ApiException('Network Failure: Offline mode active. Connection required for analysis.');
       }
-      throw ApiException(e.toString());
+      throw ApiException('Network Failure: ${e.toString()}');
     }
   }
 
@@ -72,20 +78,26 @@ class ApiService {
       ).timeout(ApiConfig.requestTimeout);
       if (response.statusCode == 200) return AnalysisResult.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
       
+      if (response.statusCode >= 500) {
+        throw ApiException('Server Error: Internal server error occurred (Status ${response.statusCode})', response.statusCode);
+      }
+
       String errorMsg = 'Failed to analyze URL (Status ${response.statusCode})';
       try {
         final decoded = jsonDecode(response.body);
         if (decoded['detail'] != null) errorMsg = decoded['detail'];
       } catch (_) {}
       throw ApiException(errorMsg, response.statusCode);
+    } on TimeoutException {
+      throw ApiException('Network Failure: The request timed out.');
     } on SocketException {
-      throw ApiException('Offline mode active. Connection required for analysis.');
+      throw ApiException('Network Failure: Offline mode active. Connection required for analysis.');
     } catch (e) {
       if (e is ApiException) rethrow;
       if (e.toString().contains('SocketException') || e.toString().contains('Connection refused')) {
-        throw ApiException('Offline mode active. Connection required for analysis.');
+        throw ApiException('Network Failure: Offline mode active. Connection required for analysis.');
       }
-      throw ApiException(e.toString());
+      throw ApiException('Network Failure: ${e.toString()}');
     }
   }
 
@@ -103,20 +115,26 @@ class ApiService {
       var responseBody = await response.stream.bytesToString();
       if (response.statusCode == 200) return AnalysisResult.fromJson(jsonDecode(responseBody) as Map<String, dynamic>);
       
+      if (response.statusCode >= 500) {
+        throw ApiException('Server Error: Internal server error occurred (Status ${response.statusCode})', response.statusCode);
+      }
+
       String errorMsg = 'Failed to analyze image (Status ${response.statusCode})';
       try {
         final decoded = jsonDecode(responseBody);
         if (decoded['detail'] != null) errorMsg = decoded['detail'];
       } catch (_) {}
       throw ApiException(errorMsg, response.statusCode);
+    } on TimeoutException {
+      throw ApiException('Network Failure: The request timed out.');
     } on SocketException {
-      throw ApiException('Offline mode active. Connection required for analysis.');
+      throw ApiException('Network Failure: Offline mode active. Connection required for analysis.');
     } catch (e) {
       if (e is ApiException) rethrow;
       if (e.toString().contains('SocketException') || e.toString().contains('Connection refused')) {
-        throw ApiException('Offline mode active. Connection required for analysis.');
+        throw ApiException('Network Failure: Offline mode active. Connection required for analysis.');
       }
-      throw ApiException(e.toString());
+      throw ApiException('Network Failure: ${e.toString()}');
     }
   }
 
@@ -134,20 +152,26 @@ class ApiService {
       var responseBody = await response.stream.bytesToString();
       if (response.statusCode == 200) return AnalysisResult.fromJson(jsonDecode(responseBody) as Map<String, dynamic>);
       
+      if (response.statusCode >= 500) {
+        throw ApiException('Server Error: Internal server error occurred (Status ${response.statusCode})', response.statusCode);
+      }
+
       String errorMsg = 'Failed to analyze video (Status ${response.statusCode})';
       try {
         final decoded = jsonDecode(responseBody);
         if (decoded['detail'] != null) errorMsg = decoded['detail'];
       } catch (_) {}
       throw ApiException(errorMsg, response.statusCode);
+    } on TimeoutException {
+      throw ApiException('Network Failure: The request timed out.');
     } on SocketException {
-      throw ApiException('Offline mode active. Connection required for analysis.');
+      throw ApiException('Network Failure: Offline mode active. Connection required for analysis.');
     } catch (e) {
       if (e is ApiException) rethrow;
       if (e.toString().contains('SocketException') || e.toString().contains('Connection refused')) {
-        throw ApiException('Offline mode active. Connection required for analysis.');
+        throw ApiException('Network Failure: Offline mode active. Connection required for analysis.');
       }
-      throw ApiException(e.toString());
+      throw ApiException('Network Failure: ${e.toString()}');
     }
   }
 

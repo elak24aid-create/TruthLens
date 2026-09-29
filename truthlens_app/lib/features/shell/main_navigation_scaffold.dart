@@ -23,14 +23,20 @@ class MainNavigationScaffold extends StatefulWidget {
 class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
   int _currentIndex = 0;
   String? _checkerInitialText;
+  String? _checkerInitialUrl;
   final List<bool> _visitedTabs = [true, false, false, false, false];
 
-  void _navigateToTab(int index, {String? initialText}) {
+  void _navigateToTab(int index, {String? initialText, String? initialUrl}) {
     setState(() {
       _currentIndex = index;
       _visitedTabs[index] = true;
       if (initialText != null) {
         _checkerInitialText = initialText;
+        _checkerInitialUrl = null;
+      }
+      if (initialUrl != null) {
+        _checkerInitialUrl = initialUrl;
+        _checkerInitialText = null;
       }
     });
   }
@@ -41,8 +47,9 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
       _visitedTabs[0] ? HomeScreen(
         onCheckNewsPressed: () => _navigateToTab(1),
         onCheckText: (text) => _navigateToTab(1, initialText: text),
+        onCheckUrl: (url) => _navigateToTab(1, initialUrl: url),
       ) : const SizedBox.shrink(),
-      _visitedTabs[1] ? CheckerScreen(initialText: _checkerInitialText) : const SizedBox.shrink(),
+      _visitedTabs[1] ? CheckerScreen(initialText: _checkerInitialText, initialUrl: _checkerInitialUrl) : const SizedBox.shrink(),
       _visitedTabs[2] ? const HistoryScreen() : const SizedBox.shrink(),
       _visitedTabs[3] ? const SavedScreen() : const SizedBox.shrink(),
       _visitedTabs[4] ? ProfileScreen(

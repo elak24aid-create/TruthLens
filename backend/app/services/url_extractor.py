@@ -118,25 +118,32 @@ def fetch_and_extract_article(url: str) -> dict:
     import spacy
     try:
         nlp = spacy.load("en_core_web_sm")
-        doc = nlp(article_text[:2000])
-        claim_text = ""
+        doc = nlp(article_text[:3000])
+        
+        candidates = []
         for sent in doc.sents:
             cleaned = re.sub(r'\[\d+\]', '', sent.text.strip())
             words = cleaned.split()
-            if 5 < len(words) < 25:
+            if 5 < len(words) < 40:
                 has_subj = any("subj" in token.dep_ for token in sent)
                 has_verb = any(token.pos_ in ["VERB", "AUX"] for token in sent)
                 if has_subj and has_verb:
-                    claim_text = cleaned
-                    break
+                    score = len(sent.ents) * 2
+                    candidates.append((score, cleaned))
                     
-        if not claim_text:
+        if candidates:
+            # Sort by score descending
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            # Pick top 2 claims and join them
+            top_claims = [c[1] for c in candidates[:2]]
+            claim_text = " ".join(top_claims)
+        else:
             clean_title = re.split(r'[-|]', title)[0].strip()
-            claim_text = clean_title[:80]
+            claim_text = clean_title[:100]
             
     except Exception:
         clean_title = re.split(r'[-|]', title)[0].strip()
-        claim_text = clean_title[:80]
+        claim_text = clean_title[:100]
 
     return {
         "title": title,

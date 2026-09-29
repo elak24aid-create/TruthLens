@@ -125,6 +125,7 @@ def perform_verification_pipeline(
                 verification_mode = VerificationMode.WEB_RESEARCH
         except Exception as e:
             logger.error(f"Web research failed: {e}")
+            raise HTTPException(status_code=500, detail="SEARCH FAILURE: Free search engine quota exceeded or timeout.")
 
     # Final Aggregation
     search_time_ms = int((time.time() - start_time) * 1000)
@@ -181,9 +182,11 @@ def check_url(request: CheckUrlRequest):
         )
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("URL check error")
-        raise HTTPException(status_code=500, detail="Failed to analyze URL.")
+        raise HTTPException(status_code=500, detail="ARTICLE EXTRACTION FAILURE: Could not extract content from the URL.")
 
 @router.post("/check-image", response_model=AnalysisResult)
 async def check_image(file: UploadFile = File(...)):
