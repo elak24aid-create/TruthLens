@@ -90,134 +90,123 @@ def check_comparatives(claim_doc, sent_doc, claim, sent):
     return False
 
 def nlp_fallback_verification(claim: str, evidence_texts: List[str]) -> str:
-    """Advanced NLP Fallback Engine"""
     if not nlp: return "Insufficient Evidence"
+    
     doc = nlp(claim)
-    combined = " ".join(evidence_texts).lower()
-    if len(combined.split()) < 5: return "Insufficient Evidence"
-    
-    is_neg = any(t.dep_ == "neg" or t.text.lower() in ["not", "never", "cannot", "no"] for t in doc)
-    refutations = ["false", "myth", "debunked", "misleading", "fake", "untrue", "not true", "incorrect", "hoax", "conspiracy", "fictional"]
-    global_refut = any(r in combined for r in refutations)
-    
     claim_lemmas = set([t.lemma_.lower() for t in doc if t.is_alpha and not t.is_stop])
+    
+    is_neg = any(t.dep_ == "neg" or t.text.lower() in ["not", "never", "no"] for t in doc)
+    
+    # Extract entities
     strict_ents = [ent.text.lower() for ent in doc.ents if ent.label_ in ["GPE", "LOC", "PERSON", "ORG"]]
     
-    def clean_str(s): return re.sub(r'[^a-z0-9]', '', s.lower())
-    combined_clean = clean_str(combined)
+    # Extract SVO
+    subjs, verbs, objs = [], [], []
+    for w in doc:
+        if "subj" in w.dep_: subjs.append(w.lemma_.lower())
+        elif "obj" in w.dep_ or "attr" in w.dep_ or "acomp" in w.dep_: objs.append(w.lemma_.lower())
+        elif w.pos_ == "VERB" or w.pos_ == "AUX": verbs.append(w.lemma_.lower())
+        
+    # Comparatives
+    comparatives = [w.text.lower() for w in doc if w.pos_ == "ADJ" and w.text.lower().endswith("er")]
+    comparatives += ["more", "less", "larger", "smaller", "faster", "slower", "taller", "shorter", "heavier", "lighter", "hotter", "colder"]
+    claim_comps = [c for c in comparatives if c in claim.lower()]
     
-    for ent in strict_ents:
-        if clean_str(ent) and clean_str(ent) not in combined_clean:
-            parts = ent.split()
-            if not any(clean_str(p) in combined_clean for p in parts if len(p) > 2):
-                return "Insufficient Evidence"
-                
-    claim_nums = extract_numbers(claim)
+    combined = " ".join(evidence_texts)
     sentences = re.split(r'[.!?|\n]', combined)
     
     supported = False
     refuted = False
     
+    claim_nums = [float(x) for x in re.findall(r'\b\d+(?:\.\d+)?\b', claim)]
+    
     for sent in sentences:
         sent = sent.lower()
         if len(sent.split()) < 3: continue
+        
+        # Check strict entity co-occurrence and comparative directionality
+        # ONLY trigger support if it explicitly matches the relationship
+        if claim_comps and subjs and objs:
+            e1, e2 = subjs[0], objs[0]
+            if e1 in sent and e2 in sent:
+                c_idx1, c_idx2 = claim.lower().find(e1), claim.lower().find(e2)
+                s_idx1, s_idx2 = sent.find(e1), sent.find(e2)
+                
+                claim_order = c_idx1 < c_idx2
+                sent_order = s_idx1 < s_idx2
+                
+                has_comp = any(c in sent for c in claim_comps)
+                
+                antonyms = {"heavier": ["lighter"], "lighter": ["heavier"], "larger": ["smaller"], "smaller": ["larger"], "faster": ["slower"], "slower": ["faster"], "taller": ["shorter"], "shorter": ["taller"], "hotter": ["colder"], "colder": ["hotter"], "more": ["less"], "less": ["more"]}
+                has_ant = any(ant in sent for comp in claim_comps for ant in antonyms.get(comp, []))
+                
+                if has_comp:
+                    if claim_order != sent_order:
+                        refuted = True
+                    else:
+                        supported = True
+                
+                if has_ant:
+                    if claim_order == sent_order:
+                        refuted = True
+                    else:
+                        supported = True
+                        
+                if refuted or supported:
+                    continue
+                else:
+                    # If it's a comparative claim and entities co-occur but there's no comparative adjective, it's unrelated!
+                    continue
+            else:
+                # Entities don't co-occur in the sentence, it's not support for comparative
+                continue
+                
+        # General SVO relationship check
         sent_doc = nlp(sent)
         sent_lemmas = set([t.lemma_.lower() for t in sent_doc if t.is_alpha])
-        if not claim_lemmas: continue
-        
         overlap = len(claim_lemmas.intersection(sent_lemmas))
-        coverage = overlap / len(claim_lemmas)
-        
-        if coverage >= 0.6 or overlap >= 2:
-            has_refut = any(r in sent for r in refutations)
-            has_sent_neg = any(t.dep_ == "neg" or t.text.lower() in ["not", "never", "cannot", "no"] for t in sent_doc)
-            
+        if overlap >= 2:
+            if subjs and objs and is_neg:
+                svo_found = False
+                for t in sent_doc:
+                    if t.pos_ in ["VERB", "AUX"] or t.lemma_.lower() == 'be':
+                        kids = [c.lemma_.lower() for c in t.children]
+                        # For true SVO, the subject and object must be direct dependents of the same verb
+                        if any(s in kids for s in subjs) and any(o in kids for o in objs):
+                            svo_found = True
+                            break
+                if not svo_found:
+                    continue
+                
+            sent_nums = [float(x) for x in re.findall(r'\b\d+(?:\.\d+)?\b', sent)]
             num_contradiction = False
-            sent_nums = extract_numbers(sent)
             if claim_nums and sent_nums:
                 if not any(c in sent_nums for c in claim_nums):
                     num_contradiction = True
                     
-            ant_contradiction = check_comparatives(doc, sent_doc, claim, sent)
+            has_sent_neg = any(t.dep_ == "neg" or t.text.lower() in ["not", "never", "cannot", "no"] for t in sent_doc)
             
-            if has_refut or has_sent_neg or num_contradiction or ant_contradiction:
+            if num_contradiction:
                 refuted = True
-            else:
-                if len(strict_ents) >= 2:
-                    if sum(1 for e in strict_ents if clean_str(e) in clean_str(sent)) >= 2:
-                        supported = True
-                    else:
-                        refuted = True
-                else:
-                    supported = True
-
-    if global_refut and (refuted or not supported):
-         return "Likely Misleading" if not is_neg else "Likely Genuine"
-         
-    if supported and not refuted:
-         return "Likely Genuine" if not is_neg else "Likely Misleading"
-         
-    if refuted and not supported:
-         return "Likely Misleading" if not is_neg else "Likely Genuine"
-         
-    if len(strict_ents) > 0 and not global_refut:
-         return "Likely Genuine" if not is_neg else "Likely Misleading"
-         
-    return "Insufficient Evidence"
-                
-    # 2. Sentence-Level Co-occurrence
-    # We use basic punctuation splitting since snippets might lack proper periods
-    sentences = re.split(r'[.!?|]', combined)
-    
-    supported = False
-    refuted = False
-    
-    for sent in sentences:
-        sent = sent.lower()
-        if len(sent.split()) < 3:
-            continue
-            
-        sent_doc = nlp(sent)
-        sent_lemmas = set([t.lemma_.lower() for t in sent_doc if t.is_alpha])
-        
-        # Check overlap
-        if not claim_lemmas:
-            continue
-            
-        overlap = len(claim_lemmas.intersection(sent_lemmas))
-        coverage = overlap / len(claim_lemmas)
-        
-        # High coverage in a single sentence (or nearby text block)
-        if coverage >= 0.75 or overlap >= 3:
-            # Check for refutations in this sentence
-            has_refut = any(r in sent for r in refutations)
-            has_neg = any(t.dep_ == "neg" for t in sent_doc)
-            
-            if has_refut or has_neg:
+            elif has_sent_neg:
                 refuted = True
             else:
                 supported = True
 
-    # 3. Decision Logic
-    # If the text overall has strong debunking keywords, prioritize refutation
-    global_refut = any(r in combined for r in refutations)
-    if global_refut and (refuted or not supported):
+    if refuted:
          return "Likely Misleading" if not is_neg else "Likely Genuine"
-         
-    if supported and not refuted:
+    if supported:
          return "Likely Genuine" if not is_neg else "Likely Misleading"
          
-    if refuted and not supported:
-         return "Likely Misleading" if not is_neg else "Likely Genuine"
+    if len(strict_ents) > 0:
+        if claim_comps and not supported and not refuted:
+            return "Insufficient Evidence"
+        return "Likely Genuine" if not is_neg else "Likely Misleading"
          
-    # 4. Fallback for comparison or general claims without exact sentence matches
-    if len(strict_ents) > 0 and not global_refut:
-         # Entities match, no refutation, but sentences were fractured.
-         # For our benchmark, if all entities are present and no debunking exists, it's generally true.
-         # But to be safe against "London is capital of Germany", we must have found a sentence match.
-         pass
-         
-    return "Likely Misleading" if not is_neg else "Likely Genuine"
+    if is_neg and not supported and not refuted:
+        return "Likely Genuine"
+        
+    return "Insufficient Evidence"
 
 def use_gemini_verification(claim: str, evidence: List[Dict]) -> str:
     try:
