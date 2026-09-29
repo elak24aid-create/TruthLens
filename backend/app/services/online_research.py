@@ -120,8 +120,10 @@ def search_wikipedia_fulltext(query: str, limit: int = 3) -> list:
     results = []
     try:
         res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5).json()
+        import html
         for item in res.get('query', {}).get('search', [])[:limit]:
             snippet = re.sub(r'<[^>]+>', '', item.get('snippet', ''))
+            snippet = html.unescape(snippet)
             results.append({
                 'title': item.get('title', ''),
                 'body': snippet,
@@ -215,7 +217,8 @@ def perform_online_research(claim: str) -> Optional[List[EvidenceItem]]:
             
     if not ddgs_results and not wiki_ev and errors:
         # Fallback to Wikipedia Fulltext
-        wiki_results = search_wikipedia_fulltext(query_text, 3)
+        short_query = " ".join(query_text.split()[:10]) if len(query_text.split()) > 10 else query_text
+        wiki_results = search_wikipedia_fulltext(short_query, 3)
         if wiki_results:
             ddgs_results.extend(wiki_results)
             errors = []
@@ -238,11 +241,13 @@ def perform_online_research(claim: str) -> Optional[List[EvidenceItem]]:
         text = title + " " + body
         
         # 2. Match Entities and Propositions
-        missing_subs = [s for s in subs if s not in text]
-        missing_objs = [o for o in objs if o not in text]
+        missing_subs = [s.lower() for s in subs if s.lower() not in text.lower()]
+        missing_objs = [o.lower() for o in objs if o.lower() not in text.lower()]
         
-        if missing_subs and missing_objs and len(subs) > 0 and len(objs) > 0:
-            continue # IRRELEVANT
+        # If it's a short claim, strictly enforce subject/object presence
+        if len(query_text.split()) < 15:
+            if missing_subs and missing_objs and len(subs) > 0 and len(objs) > 0:
+                continue # IRRELEVANT
             
         if "manager" in query_text.lower() and "manager" not in text:
             continue
@@ -275,11 +280,15 @@ def perform_online_research(claim: str) -> Optional[List[EvidenceItem]]:
         clean_text = re.sub(r'[^\w\s]', '', text)
         exact_match = clean_claim in clean_text
         
-        # Determine explicit SUPPORT vs CONTRADICTION
-        # Very short claims like "The Sun is a star." matched closely in text
-        all_words = set(clean_claim.split())
-        words_found = len([w for w in all_words if w in clean_text.split()])
-        mostly_matched = (words_found / len(all_words) >= 0.5) if all_words else False
+        # Match Entities and Propositions
+        matched_keywords = set(w.lower() for w in subs | objs if w.lower() in clean_text)
+        total_keywords = set(w.lower() for w in subs | objs)
+        if total_keywords:
+            mostly_matched = (len(matched_keywords) / len(total_keywords)) >= 0.3
+        else:
+            all_words = set(clean_claim.split())
+            words_found = len([w for w in all_words if w in clean_text.split()])
+            mostly_matched = (words_found / len(all_words) >= 0.3) if all_words else False
         
         if exact_match and not is_contradicted and not relation_negated:
             relationship = "DIRECT_SUPPORT"
