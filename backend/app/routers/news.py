@@ -24,7 +24,10 @@ def fetch_rss(query: str, limit: int) -> List[NewsArticle]:
     try:
         # Google News RSS
         url = f"https://news.google.com/rss/search?q={quote(query)}"
-        feed = feedparser.parse(url)
+        import urllib.request
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        xml = urllib.request.urlopen(req, timeout=10).read()
+        feed = feedparser.parse(xml)
         for entry in feed.entries[:limit]:
             try:
                 dt = parsedate_to_datetime(entry.published)
