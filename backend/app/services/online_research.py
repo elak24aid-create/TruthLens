@@ -28,7 +28,7 @@ def search_ddgs(query: str, max_results: int = 5) -> List[Dict]:
                     results.append(res)
                 return results
         except Exception:
-            time.sleep(1)
+            time.sleep(2)
     return results
 
 def search_wiki(query: str, limit: int = 3) -> List[Dict]:
@@ -66,34 +66,98 @@ def evaluate_math(claim: str) -> Optional[bool]:
             pass
     return None
 
+def extract_numbers(text):
+    return [float(x) for x in re.findall(r'\b\d+(?:\.\d+)?\b', text)]
+
+def check_comparatives(claim_doc, sent_doc, claim, sent):
+    # If the claim contains antonyms of what the sentence has
+    antonyms = {
+        "larger": ["smaller", "less"], "smaller": ["larger", "greater", "bigger"],
+        "faster": ["slower"], "slower": ["faster"],
+        "taller": ["shorter"], "shorter": ["taller", "higher"],
+        "heavier": ["lighter"], "lighter": ["heavier"],
+        "hotter": ["colder", "cooler"], "colder": ["hotter", "warmer"],
+        "longest": ["shortest"], "shortest": ["longest"],
+        "largest": ["smallest"], "smallest": ["largest"],
+        "highest": ["lowest"], "lowest": ["highest"]
+    }
+    for word in claim_doc:
+        w = word.text.lower()
+        if w in antonyms:
+            for ant in antonyms[w]:
+                if ant in sent.lower():
+                    return True # contradiction found
+    return False
+
 def nlp_fallback_verification(claim: str, evidence_texts: List[str]) -> str:
-    """Stage 1-11 NLP Fallback Engine"""
-    if not nlp:
-        return "Insufficient Evidence"
-        
+    """Advanced NLP Fallback Engine"""
+    if not nlp: return "Insufficient Evidence"
     doc = nlp(claim)
     combined = " ".join(evidence_texts).lower()
+    if len(combined.split()) < 5: return "Insufficient Evidence"
     
-    if len(combined.split()) < 10:
-        return "Insufficient Evidence"
-        
-    is_neg = any(t.dep_ == "neg" for t in doc)
-    
-    refutations = ["false", "myth", "debunked", "misleading", "fake", "untrue", "not true", "incorrect", "hoax", "no evidence", "conspiracy"]
+    is_neg = any(t.dep_ == "neg" or t.text.lower() in ["not", "never", "cannot", "no"] for t in doc)
+    refutations = ["false", "myth", "debunked", "misleading", "fake", "untrue", "not true", "incorrect", "hoax", "conspiracy", "fictional"]
+    global_refut = any(r in combined for r in refutations)
     
     claim_lemmas = set([t.lemma_.lower() for t in doc if t.is_alpha and not t.is_stop])
-    strict_ents = [ent.text.lower() for ent in doc.ents if ent.label_ in ["CARDINAL", "QUANTITY", "DATE", "ORDINAL", "GPE", "LOC", "PERSON", "ORG", "PERCENT"]]
+    strict_ents = [ent.text.lower() for ent in doc.ents if ent.label_ in ["GPE", "LOC", "PERSON", "ORG"]]
     
-    # Clean non-alphanumeric for strict matching
     def clean_str(s): return re.sub(r'[^a-z0-9]', '', s.lower())
     combined_clean = clean_str(combined)
     
-    # 1. Missing Entities -> False
     for ent in strict_ents:
         if clean_str(ent) and clean_str(ent) not in combined_clean:
             parts = ent.split()
             if not any(clean_str(p) in combined_clean for p in parts if len(p) > 2):
-                return "Likely Misleading" if not is_neg else "Likely Genuine"
+                return "Insufficient Evidence"
+                
+    claim_nums = extract_numbers(claim)
+    sentences = re.split(r'[.!?|\n]', combined)
+    
+    supported = False
+    refuted = False
+    
+    for sent in sentences:
+        sent = sent.lower()
+        if len(sent.split()) < 3: continue
+        sent_doc = nlp(sent)
+        sent_lemmas = set([t.lemma_.lower() for t in sent_doc if t.is_alpha])
+        if not claim_lemmas: continue
+        
+        overlap = len(claim_lemmas.intersection(sent_lemmas))
+        coverage = overlap / len(claim_lemmas)
+        
+        if coverage >= 0.6 or overlap >= 2:
+            has_refut = any(r in sent for r in refutations)
+            has_sent_neg = any(t.dep_ == "neg" or t.text.lower() in ["not", "never", "cannot", "no"] for t in sent_doc)
+            
+            num_contradiction = False
+            sent_nums = extract_numbers(sent)
+            if claim_nums and sent_nums:
+                if not any(c in sent_nums for c in claim_nums):
+                    num_contradiction = True
+                    
+            ant_contradiction = check_comparatives(doc, sent_doc, claim, sent)
+            
+            if has_refut or has_sent_neg or num_contradiction or ant_contradiction:
+                refuted = True
+            else:
+                supported = True
+
+    if global_refut and (refuted or not supported):
+         return "Likely Misleading" if not is_neg else "Likely Genuine"
+         
+    if supported and not refuted:
+         return "Likely Genuine" if not is_neg else "Likely Misleading"
+         
+    if refuted and not supported:
+         return "Likely Misleading" if not is_neg else "Likely Genuine"
+         
+    if len(strict_ents) > 0 and not global_refut:
+         return "Likely Genuine" if not is_neg else "Likely Misleading"
+         
+    return "Insufficient Evidence"
                 
     # 2. Sentence-Level Co-occurrence
     # We use basic punctuation splitting since snippets might lack proper periods
