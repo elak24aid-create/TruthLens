@@ -71,8 +71,13 @@ def check_identity(text: str) -> Optional[EvidenceItem]:
         for candidate in set(candidates):
             summary = get_wiki_summary(candidate)
             if summary:
-                # Better matching logic for Wiki
                 summary_lower = summary.lower()
+                
+                # Skip disambiguation pages — they contain multiple meanings, not useful for verification
+                if "may refer to" in summary_lower or "disambiguation" in summary_lower:
+                    continue
+                
+                # Better matching logic for Wiki
                 # If ANY of the attributes are explicitly matched in the summary, it's strong direct support
                 # Example: "The Sun is a star" -> attr_lemmas = ['star']. "star" in summary -> SUPPORT
                 rel = "UNRELATED"
@@ -217,14 +222,14 @@ def perform_online_research(claim: str) -> Optional[List[EvidenceItem]]:
         except Exception as e:
             errors.append(e)
             
-    if not ddgs_results and not wiki_ev:
-        # Fallback to Wikipedia Fulltext
+    if not ddgs_results:
+        # DDGS returned nothing — always try Wikipedia full-text as fallback
         short_query = " ".join(query_text.split()[:10]) if len(query_text.split()) > 10 else query_text
-        wiki_results = search_wikipedia_fulltext(short_query, 3)
+        wiki_results = search_wikipedia_fulltext(short_query, 5)
         if wiki_results:
             ddgs_results.extend(wiki_results)
             errors = []
-        elif errors:
+        elif not wiki_ev and errors:
             raise Exception("Search engine failure or timeout.")
 
     if wiki_ev:
@@ -256,49 +261,93 @@ def perform_online_research(claim: str) -> Optional[List[EvidenceItem]]:
             
         relationship = "CONTEXTUAL"
         
-        # 3. Explicit Contradiction
-        contradiction_patterns = [
-            r'\b(false|fake|debunked|hoax|misleading|unfounded|myth|untrue|conspiracy)\b',
+        # 3. Explicit Contradiction — tighter: only hard debunking language counts unconditionally.
+        # Soft negation (is not, did not, never) only counts when a claim entity is also in the snippet.
+        hard_contradiction_patterns = [
+            r'\b(false|fake|debunked|hoax|misleading|unfounded|myth|untrue|conspiracy|misinformation|disproven)\b',
             r'\b(no evidence)\b',
-            r'\b(is not)\b',
-            r'\b(did not)\b',
-            r'\b(never)\b',
             r'\b(not true)\b',
-            r'\b(wrong)\b'
+        ]
+        soft_negation_patterns = [
+            r'\b(is not a)\b',
+            r'\b(was not)\b',
+            r'\b(did not)\b',
+            r'\b(never was)\b',
+            r'\b(incorrect)\b',
         ]
         
         # 4. Explicit Support
         support_patterns = [
-            r'\b(true|accurate|confirm|confirmed|verified|proven|fact)\b',
+            r'\b(confirmed|verified|proven|established fact|scientific consensus|documented)\b',
             r'\b(is true)\b',
-            r'\b(is indeed)\b'
+            r'\b(is indeed)\b',
+            r'\b(is a)\b',
+            r'\b(is the)\b',
+            r'\b(true|accurate|confirm|fact)\b',
         ]
         
-        is_contradicted = any(re.search(pat, text) for pat in contradiction_patterns)
+        is_hard_contradicted = any(re.search(pat, text) for pat in hard_contradiction_patterns)
+        is_soft_negated = any(re.search(pat, text) for pat in soft_negation_patterns)
+        claim_entities_present = any(s.lower() in text for s in subs | objs if len(s) > 3)
+        is_contradicted = is_hard_contradicted or (is_soft_negated and claim_entities_present)
         is_supported = any(re.search(pat, text) for pat in support_patterns)
-        relation_negated = any(f"not {v}" in text or f"did not {v}" in text or f"never {v}" in text for v in verbs)
+        relation_negated = claim_entities_present and any(
+            f"not {v}" in text or f"never {v}" in text for v in verbs if len(v) > 3
+        )
+        
+        # Location contradiction check: if the claim says "X is located in PLACE_A" but
+        # the snippet says "X is in PLACE_B" (a different continent/country), mark as DIRECT_CONTRADICTION.
+        # Use NER-based location extraction from the claim to detect this.
+        if nlp and not is_contradicted:
+            claim_doc = nlp(query_text)
+            claim_gpe = [ent.text.lower() for ent in claim_doc.ents if ent.label_ in ["GPE", "LOC"]]
+            # Extract what locations the snippet mentions for the same subject
+            text_doc = nlp(text[:500])  # only check a short window for speed
+            text_gpe = [ent.text.lower() for ent in text_doc.ents if ent.label_ in ["GPE", "LOC"]]
+            # If the claim mentions a location and the snippet mentions a DIFFERENT location for the same entity
+            if claim_gpe and text_gpe:
+                # Any claim location NOT in snippet = possible contradiction, any snippet location NOT in claim = possible contradiction
+                claim_locs_missing = [loc for loc in claim_gpe if not any(loc in t_loc or t_loc in loc for t_loc in text_gpe)]
+                text_locs_extra = [loc for loc in text_gpe if not any(loc in c_loc or c_loc in loc for c_loc in claim_gpe)]
+                # Only mark as contradiction if all claim locations are missing AND snippet asserts other locations
+                if claim_locs_missing and len(claim_locs_missing) == len(claim_gpe) and text_locs_extra:
+                    is_contradicted = True
         
         clean_claim = re.sub(r'[^\w\s]', '', query_text.lower())
         clean_text = re.sub(r'[^\w\s]', '', text)
         exact_match = clean_claim in clean_text
         
-        # Match Entities and Propositions
-        matched_keywords = set(w.lower() for w in subs | objs if w.lower() in clean_text)
-        total_keywords = set(w.lower() for w in subs | objs)
+        # Keyword overlap scoring — ignore stop words (len<=3)
+        matched_keywords = set(w.lower() for w in subs | objs if len(w) > 3 and w.lower() in clean_text)
+        total_keywords = set(w.lower() for w in subs | objs if len(w) > 3)
         if total_keywords:
-            mostly_matched = (len(matched_keywords) / len(total_keywords)) >= 0.3
+            keyword_overlap = len(matched_keywords) / len(total_keywords)
         else:
-            all_words = set(clean_claim.split())
+            all_words = [w for w in clean_claim.split() if len(w) > 3]
             words_found = len([w for w in all_words if w in clean_text.split()])
-            mostly_matched = (words_found / len(all_words) >= 0.3) if all_words else False
+            keyword_overlap = (words_found / len(all_words)) if all_words else 0.0
         
-        if exact_match and not is_contradicted and not relation_negated:
-            relationship = "DIRECT_SUPPORT"
-        elif mostly_matched and not is_contradicted and not relation_negated and any(d in url.lower() for d in ['wikipedia.org', 'nasa.gov', 'who.int', 'cdc.gov']):
-            relationship = "DIRECT_SUPPORT"
-        elif is_contradicted or relation_negated:
+        # Extended high-authority source list
+        HIGH_AUTHORITY = [
+            'wikipedia.org', 'nasa.gov', 'who.int', 'cdc.gov', 'britannica.com',
+            'nih.gov', 'nhs.uk', 'snopes.com', 'factcheck.org', 'politifact.com',
+            'reuters.com', 'apnews.com', 'bbc.co.uk', 'bbc.com', 'nationalgeographic.com',
+            'history.com', 'science.org', 'nature.com', 'newscientist.com',
+            'scientificamerican.com', 'pbs.org', 'smithsonianmag.com'
+        ]
+        is_high_authority = any(d in url.lower() for d in HIGH_AUTHORITY)
+        
+        if is_contradicted or relation_negated:
             relationship = "DIRECT_CONTRADICTION"
-        elif is_supported and mostly_matched:
+        elif exact_match and not is_contradicted:
+            relationship = "DIRECT_SUPPORT"
+        elif keyword_overlap >= 0.5 and not is_contradicted:
+            # 50%+ of key entities present in snippet — strong topical match
+            relationship = "DIRECT_SUPPORT"
+        elif keyword_overlap >= 0.3 and is_high_authority and not is_contradicted:
+            # Authoritative source with partial entity match — treat as support
+            relationship = "DIRECT_SUPPORT"
+        elif is_supported and keyword_overlap >= 0.3:
             relationship = "DIRECT_SUPPORT"
         
         source = url.split('/')[2] if url else 'Unknown'
