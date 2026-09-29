@@ -49,6 +49,9 @@ def fetch_and_extract_article(url: str) -> dict:
         headers={'User-Agent': 'TruthLens/1.0 (Research Bot)'}
     )
     
+    html = b""
+    is_fallback = False
+    
     try:
         # 10s timeout
         with urllib.request.urlopen(req, timeout=10) as response:
@@ -60,73 +63,94 @@ def fetch_and_extract_article(url: str) -> dict:
             # Limit read size (e.g., 2MB)
             html = response.read(2 * 1024 * 1024)
     except Exception as e:
+        is_fallback = True
+
+    if is_fallback:
         # Fallback: extract metadata from URL path
         parsed = urllib.parse.urlparse(url)
         path = parsed.path
         parts = [p for p in path.split('/') if p and not p.isdigit() and len(p) > 5]
-        if parts:
-            last_part = parts[-1]
-            last_part = re.sub(r'\.[a-zA-Z0-9]+$', '', last_part) # Remove extension
-            fallback_claim = last_part.replace('-', ' ').replace('_', ' ').strip()
+        if not parts:
+            raise ValueError("This article could not be accessed for verification.")
             
-            if len(fallback_claim) > 15:
-                return {
-                    "title": fallback_claim.title(),
-                    "description": "",
-                    "source_name": parsed.hostname,
-                    "published_at": "",
-                    "article_text": "",
-                    "claim_text": fallback_claim,
-                    "is_fallback": True,
-                    "fetch_error": str(e)
-                }
-        raise ValueError("This article could not be accessed for verification.")
-
-    soup = BeautifulSoup(html, 'html.parser')
-    
-    # Extract metadata
-    title = ""
-    if soup.title:
-        title = soup.title.string.strip()
+        last_part = parts[-1]
+        last_part = re.sub(r'\.[a-zA-Z0-9]+$', '', last_part) # Remove extension
+        fallback_claim = last_part.replace('-', ' ').replace('_', ' ').strip()
         
-    og_title = soup.find("meta", property="og:title")
-    if og_title and og_title.get("content"):
-        title = og_title.get("content").strip()
-
-    description = ""
-    og_desc = soup.find("meta", property="og:description")
-    if og_desc and og_desc.get("content"):
-        description = og_desc.get("content").strip()
+        if len(fallback_claim) <= 15:
+            raise ValueError("This article could not be accessed for verification.")
+            
+        article_text = ""
+        try:
+            from ddgs import DDGS
+            with DDGS() as ddgs:
+                q = f'"{fallback_claim}" site:{parsed.hostname}'
+                results = list(ddgs.text(q, max_results=3))
+                if not results:
+                    q = f'{fallback_claim} site:{parsed.hostname}'
+                    results = list(ddgs.text(q, max_results=3))
+                if not results:
+                    q = fallback_claim
+                    results = list(ddgs.text(q, max_results=3))
+                if results:
+                    article_text = " ".join([r.get('body', '') for r in results])
+        except Exception:
+            pass
+            
+        if not article_text.strip():
+            raise ValueError("This article could not be accessed for verification.")
+            
+        title = fallback_claim.title()
+        description = ""
+        source_name = parsed.hostname
+        published_at = ""
+        
     else:
-        meta_desc = soup.find("meta", attrs={"name": "description"})
-        if meta_desc and meta_desc.get("content"):
-            description = meta_desc.get("content").strip()
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        # Extract metadata
+        title = ""
+        if soup.title:
+            title = soup.title.string.strip()
+            
+        og_title = soup.find("meta", property="og:title")
+        if og_title and og_title.get("content"):
+            title = og_title.get("content").strip()
 
-    source_name = ""
-    og_site_name = soup.find("meta", property="og:site_name")
-    if og_site_name and og_site_name.get("content"):
-        source_name = og_site_name.get("content").strip()
-    else:
-        parsed_url = urllib.parse.urlparse(url)
-        source_name = parsed_url.hostname
+        description = ""
+        og_desc = soup.find("meta", property="og:description")
+        if og_desc and og_desc.get("content"):
+            description = og_desc.get("content").strip()
+        else:
+            meta_desc = soup.find("meta", attrs={"name": "description"})
+            if meta_desc and meta_desc.get("content"):
+                description = meta_desc.get("content").strip()
 
-    published_at = ""
-    article_published_time = soup.find("meta", property="article:published_time")
-    if article_published_time and article_published_time.get("content"):
-        published_at = article_published_time.get("content").strip()
+        source_name = ""
+        og_site_name = soup.find("meta", property="og:site_name")
+        if og_site_name and og_site_name.get("content"):
+            source_name = og_site_name.get("content").strip()
+        else:
+            parsed_url = urllib.parse.urlparse(url)
+            source_name = parsed_url.hostname
 
-    # Extract article text
-    # Remove script and style elements
-    for script in soup(["script", "style", "nav", "footer", "header", "aside"]):
-        script.decompose()
+        published_at = ""
+        article_published_time = soup.find("meta", property="article:published_time")
+        if article_published_time and article_published_time.get("content"):
+            published_at = article_published_time.get("content").strip()
 
-    # Get text
-    article_text = soup.get_text(separator=' ')
-    
-    # Clean up whitespace
-    lines = (line.strip() for line in article_text.splitlines())
-    chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-    article_text = ' '.join(chunk for chunk in chunks if chunk)
+        # Extract article text
+        # Remove script and style elements
+        for script in soup(["script", "style", "nav", "footer", "header", "aside"]):
+            script.decompose()
+
+        # Get text
+        article_text = soup.get_text(separator=' ')
+        
+        # Clean up whitespace
+        lines = (line.strip() for line in article_text.splitlines())
+        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+        article_text = ' '.join(chunk for chunk in chunks if chunk)
 
     # Limit article text to prevent overloading ML
     if len(article_text) > 20000:
