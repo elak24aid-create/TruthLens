@@ -112,6 +112,25 @@ def extract_svo(text: str):
     entities = [ent.text.lower() for ent in doc.ents]
     return {"subjects": subjects, "objects": objects, "verbs": verbs, "entities": entities}
 
+
+def search_wikipedia_fulltext(query: str, limit: int = 3) -> list:
+    import urllib.parse, requests, re
+    q = urllib.parse.quote(query)
+    url = f"https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={q}&utf8=&format=json"
+    results = []
+    try:
+        res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5).json()
+        for item in res.get('query', {}).get('search', [])[:limit]:
+            snippet = re.sub(r'<[^>]+>', '', item.get('snippet', ''))
+            results.append({
+                'title': item.get('title', ''),
+                'body': snippet,
+                'href': f"https://en.wikipedia.org/wiki/{urllib.parse.quote(item.get('title', ''))}"
+            })
+    except Exception:
+        pass
+    return results
+
 def search_ddgs(query: str, max_results: int = 5) -> List[Dict]:
     results = []
     with DDGS() as ddgs:
@@ -195,7 +214,13 @@ def perform_online_research(claim: str) -> Optional[List[EvidenceItem]]:
             errors.append(e)
             
     if not ddgs_results and not wiki_ev and errors:
-        raise Exception("Search engine failure or timeout.")
+        # Fallback to Wikipedia Fulltext
+        wiki_results = search_wikipedia_fulltext(query_text, 3)
+        if wiki_results:
+            ddgs_results.extend(wiki_results)
+            errors = []
+        else:
+            raise Exception("Search engine failure or timeout.")
 
     if wiki_ev:
         evidence.append(wiki_ev)
@@ -204,7 +229,7 @@ def perform_online_research(claim: str) -> Optional[List[EvidenceItem]]:
     
     for res in ddgs_results:
         url = res.get('href', '')
-        if url in seen_urls or 'wikipedia.org' in url.lower():
+        if url in seen_urls:
             continue
         seen_urls.add(url)
         
@@ -254,9 +279,11 @@ def perform_online_research(claim: str) -> Optional[List[EvidenceItem]]:
         # Very short claims like "The Sun is a star." matched closely in text
         all_words = set(clean_claim.split())
         words_found = len([w for w in all_words if w in clean_text.split()])
-        mostly_matched = (words_found / len(all_words) >= 0.7) if all_words else False
+        mostly_matched = (words_found / len(all_words) >= 0.5) if all_words else False
         
         if exact_match and not is_contradicted and not relation_negated:
+            relationship = "DIRECT_SUPPORT"
+        elif mostly_matched and not is_contradicted and not relation_negated and any(d in url.lower() for d in ['wikipedia.org', 'nasa.gov', 'who.int', 'cdc.gov']):
             relationship = "DIRECT_SUPPORT"
         elif is_contradicted or relation_negated:
             relationship = "DIRECT_CONTRADICTION"
